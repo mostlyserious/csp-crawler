@@ -1,0 +1,9 @@
+{
+  "name": "YouTube Embeds",
+  "directives": {
+    "frame-src": [
+      "https://www.youtube.com",
+      "https://www.youtube-nocookie.com"
+    ]
+  }
+}

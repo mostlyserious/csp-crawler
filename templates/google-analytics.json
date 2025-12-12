@@ -1,0 +1,19 @@
+{
+  "name": "Google Analytics / Tag Manager",
+  "directives": {
+    "script-src": [
+      "https://www.googletagmanager.com",
+      "https://www.google-analytics.com",
+      "https://ssl.google-analytics.com"
+    ],
+    "img-src": [
+      "https://www.google-analytics.com",
+      "https://ssl.google-analytics.com"
+    ],
+    "connect-src": [
+      "https://www.google-analytics.com",
+      "https://ssl.google-analytics.com",
+      "https://analytics.google.com"
+    ]
+  }
+}

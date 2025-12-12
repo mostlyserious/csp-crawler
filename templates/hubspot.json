@@ -1,0 +1,18 @@
+{
+  "name": "HubSpot",
+  "directives": {
+    "script-src": [
+      "https://js.hs-scripts.com",
+      "https://js.hsforms.net",
+      "https://js.hscollectedforms.net",
+      "https://js.usemessages.com"
+    ],
+    "connect-src": [
+      "https://api.hubspot.com",
+      "https://forms.hubspot.com"
+    ],
+    "frame-src": [
+      "https://app.hubspot.com"
+    ]
+  }
+}

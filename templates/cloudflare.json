@@ -1,0 +1,11 @@
+{
+  "name": "Cloudflare CDN",
+  "directives": {
+    "script-src": [
+      "https://cdnjs.cloudflare.com"
+    ],
+    "style-src": [
+      "https://cdnjs.cloudflare.com"
+    ]
+  }
+}

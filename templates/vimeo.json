@@ -1,0 +1,8 @@
+{
+  "name": "Vimeo Embeds",
+  "directives": {
+    "frame-src": [
+      "https://player.vimeo.com"
+    ]
+  }
+}

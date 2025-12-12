@@ -1,6 +1,17 @@
 import 'dotenv/config';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const reportsDir = path.join(__dirname, '..', 'reports');
+
+function getTimestampedFilename(prefix) {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    return path.join(reportsDir, `${prefix}-${timestamp}.json`);
+}
 
 if (!process.env.BASE_URL) {
     console.error('❌ BASE_URL environment variable is required');
@@ -10,7 +21,7 @@ if (!process.env.BASE_URL) {
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
-    outputFile: process.env.OUTPUT_FILE || 'csp-violations-detailed.json',
+    outputFile: getTimestampedFilename('csp-violations'),
     headless: process.env.HEADLESS === 'true'
 };
 

@@ -1,0 +1,14 @@
+{
+  "name": "Facebook / Meta Pixel",
+  "directives": {
+    "script-src": [
+      "https://connect.facebook.net"
+    ],
+    "img-src": [
+      "https://www.facebook.com"
+    ],
+    "connect-src": [
+      "https://www.facebook.com"
+    ]
+  }
+}

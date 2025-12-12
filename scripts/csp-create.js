@@ -1,6 +1,19 @@
 import 'dotenv/config';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const templatesDir = path.join(__dirname, '..', 'templates');
+const reportsDir = path.join(__dirname, '..', 'reports');
+
+function getTimestampedFilename(prefix) {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    return path.join(reportsDir, `${prefix}-${timestamp}.json`);
+}
 
 if (!process.env.BASE_URL) {
     console.error('❌ BASE_URL environment variable is required');
@@ -10,11 +23,61 @@ if (!process.env.BASE_URL) {
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
-    outputFile: process.env.CSP_OUTPUT_FILE || 'csp-policy.json',
+    outputFile: getTimestampedFilename('csp-policy'),
     headless: process.env.HEADLESS === 'true'
 };
 
 const baseOrigin = new URL(config.baseUrl).origin;
+
+// Prompt helper
+function prompt(question) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+    return new Promise(resolve => {
+        rl.question(question, answer => {
+            rl.close();
+            resolve(answer.toLowerCase().trim());
+        });
+    });
+}
+
+async function askYesNo(question) {
+    const answer = await prompt(`${question} (y/n): `);
+    return answer === 'y' || answer === 'yes';
+}
+
+// Load templates from directory
+function loadTemplates() {
+    const templates = [];
+    if (!fs.existsSync(templatesDir)) return templates;
+    
+    const files = fs.readdirSync(templatesDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+        try {
+            const content = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
+            templates.push({ file, ...content });
+        } catch (e) {
+            console.log(`⚠️  Could not load template: ${file}`);
+        }
+    }
+    return templates;
+}
+
+// Merge template directives into policy
+function mergeTemplate(policy, template) {
+    for (const [directive, sources] of Object.entries(template.directives)) {
+        if (!policy[directive]) {
+            policy[directive] = ["'self'"];
+        }
+        for (const source of sources) {
+            if (!policy[directive].includes(source)) {
+                policy[directive].push(source);
+            }
+        }
+    }
+}
 
 async function createCSP() {
     console.log('🔍 Starting CSP creator...');
@@ -186,6 +249,26 @@ async function createCSP() {
     // Ensure default-src exists
     policy['default-src'] = ["'self'"];
     
+    // Template prompts
+    const templates = loadTemplates();
+    const includedTemplates = [];
+    
+    if (templates.length > 0) {
+        console.log('');
+        const includeTemplates = await askYesNo('Do you wish to include template sources in this report?');
+        
+        if (includeTemplates) {
+            for (const template of templates) {
+                const include = await askYesNo(`  Include ${template.name}?`);
+                if (include) {
+                    mergeTemplate(policy, template);
+                    includedTemplates.push(template.name);
+                    console.log(`    ✅ Added ${template.name}`);
+                }
+            }
+        }
+    }
+    
     // Build header string
     const headerParts = [];
     for (const [directive, sources] of Object.entries(policy)) {
@@ -199,6 +282,7 @@ async function createCSP() {
         pagesScanned: visited.size,
         hasInlineScripts,
         hasInlineStyles,
+        includedTemplates,
         policy,
         header: headerString
     };
