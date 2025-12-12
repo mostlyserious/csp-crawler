@@ -2,6 +2,7 @@
   "type": "module",
   "scripts": {
     "check": "node scripts/csp-validator.js",
+    "clear-reports": "node scripts/clear-reports.js",
     "create": "node scripts/csp-create.js",
     "validate": "node scripts/csp-validator.js"
   },
