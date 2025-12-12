@@ -151,7 +151,7 @@ async function crawlSite() {
 // Check if puppeteer is available
 try {
     crawlSite().catch(console.error)
-} catch (error) {
+} catch (_error) {
     console.log('❌ Puppeteer not installed. Install with:')
     console.log('   npm install puppeteer')
 }

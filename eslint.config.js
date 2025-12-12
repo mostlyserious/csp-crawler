@@ -23,6 +23,7 @@ export default [
             globals: {
                 Bun: 'readonly',
                 ...globals.node,
+                ...globals.browser,
             },
         },
         rules: {

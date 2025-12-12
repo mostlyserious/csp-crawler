@@ -64,7 +64,7 @@ function loadTemplates() {
             const content = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'))
 
             templates.push({ file, ...content })
-        } catch (e) {
+        } catch (_e) {
             console.log(`⚠️  Could not load template: ${file}`)
         }
     }
@@ -161,7 +161,7 @@ async function createCSP() {
                         break
                 }
             }
-        } catch (e) {
+        } catch (_e) {
             // Invalid URL, skip
         }
         
