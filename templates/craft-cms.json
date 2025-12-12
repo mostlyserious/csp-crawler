@@ -3,6 +3,11 @@
   "directives": {
     "img-src": [
       "*.craft-cdn.com"
+    ],
+    "connect-src": [
+      "https://api.craftcms.com",
+      "https://plugins.craftcms.com",
+      "https://feed-proxy.craftcms.com"
     ]
   }
 }

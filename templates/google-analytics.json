@@ -14,7 +14,12 @@
     "connect-src": [
       "https://www.google-analytics.com",
       "https://ssl.google-analytics.com",
-      "https://analytics.google.com"
+      "https://analytics.google.com",
+      "https://stats.g.doubleclick.net"
+    ],
+    "frame-src": [
+      "https://www.google.com",
+      "https://www.googletagmanager.com"
     ]
   }
 }

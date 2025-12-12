@@ -246,8 +246,9 @@ async function createCSP() {
         policy['style-src'].push("'unsafe-inline'");
     }
     
-    // Ensure default-src exists
+    // Ensure default-src and base-uri exist
     policy['default-src'] = ["'self'"];
+    policy['base-uri'] = ["'self'"];
     
     // Always include data: for img-src (data URLs are common)
     if (!policy['img-src']) {

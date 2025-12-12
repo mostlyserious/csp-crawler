@@ -1,0 +1,12 @@
+{
+  "name": "Google reCAPTCHA",
+  "directives": {
+    "script-src": [
+      "https://www.google.com",
+      "https://www.gstatic.com"
+    ],
+    "frame-src": [
+      "https://www.google.com"
+    ]
+  }
+}
