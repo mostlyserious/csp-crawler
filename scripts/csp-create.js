@@ -1,94 +1,102 @@
-import 'dotenv/config';
-import puppeteer from 'puppeteer';
-import fs from 'fs';
-import path from 'path';
-import readline from 'readline';
-import { fileURLToPath } from 'url';
+import 'dotenv/config'
+import puppeteer from 'puppeteer'
+import fs from 'fs'
+import path from 'path'
+import readline from 'readline'
+import { fileURLToPath } from 'url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const templatesDir = path.join(__dirname, '..', 'templates');
-const reportsDir = path.join(__dirname, '..', 'reports');
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const templatesDir = path.join(__dirname, '..', 'templates')
+const reportsDir = path.join(__dirname, '..', 'reports')
 
 function getTimestampedFilename(prefix) {
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    return path.join(reportsDir, `${prefix}-${timestamp}.json`);
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+
+    return path.join(reportsDir, `${prefix}-${timestamp}.json`)
 }
 
 if (!process.env.BASE_URL) {
-    console.error('❌ BASE_URL environment variable is required');
-    process.exit(1);
+    console.error('❌ BASE_URL environment variable is required')
+    process.exit(1)
 }
 
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
     outputFile: getTimestampedFilename('csp-policy'),
-    headless: process.env.HEADLESS === 'true'
-};
+    headless: process.env.HEADLESS === 'true',
+}
 
-const baseOrigin = new URL(config.baseUrl).origin;
+const baseOrigin = new URL(config.baseUrl).origin
 
 // Prompt helper
 function prompt(question) {
     const rl = readline.createInterface({
         input: process.stdin,
-        output: process.stdout
-    });
+        output: process.stdout,
+    })
+
     return new Promise(resolve => {
         rl.question(question, answer => {
-            rl.close();
-            resolve(answer.toLowerCase().trim());
-        });
-    });
+            rl.close()
+            resolve(answer.toLowerCase().trim())
+        })
+    })
 }
 
 async function askYesNo(question) {
-    const answer = await prompt(`${question} (y/n): `);
-    return answer === 'y' || answer === 'yes';
+    const answer = await prompt(`${question} (y/n): `)
+
+    return answer === 'y' || answer === 'yes'
 }
 
 // Load templates from directory
 function loadTemplates() {
-    const templates = [];
-    if (!fs.existsSync(templatesDir)) return templates;
+    const templates = []
+
+    if (!fs.existsSync(templatesDir)) {return templates}
     
-    const files = fs.readdirSync(templatesDir).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(templatesDir).filter(f => f.endsWith('.json'))
+
     for (const file of files) {
         try {
-            const content = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'));
-            templates.push({ file, ...content });
+            const content = JSON.parse(fs.readFileSync(path.join(templatesDir, file), 'utf-8'))
+
+            templates.push({ file, ...content })
         } catch (e) {
-            console.log(`⚠️  Could not load template: ${file}`);
+            console.log(`⚠️  Could not load template: ${file}`)
         }
     }
-    return templates;
+
+    return templates
 }
 
 // Merge template directives into policy
 function mergeTemplate(policy, template) {
-    for (const [directive, sources] of Object.entries(template.directives)) {
+    for (const [ directive, sources ] of Object.entries(template.directives)) {
         if (!policy[directive]) {
-            policy[directive] = ["'self'"];
+            policy[directive] = [ "'self'" ]
         }
+
         for (const source of sources) {
             if (!policy[directive].includes(source)) {
-                policy[directive].push(source);
+                policy[directive].push(source)
             }
         }
     }
 }
 
 async function createCSP() {
-    console.log('🔍 Starting CSP creator...');
-    console.log(`📍 Base URL: ${config.baseUrl}`);
+    console.log('🔍 Starting CSP creator...')
+    console.log(`📍 Base URL: ${config.baseUrl}`)
     
     const browser = await puppeteer.launch({ 
         headless: config.headless,
-        devtools: false 
-    });
+        devtools: false, 
+    })
     
-    const page = await browser.newPage();
+    const page = await browser.newPage()
     
     // Track external origins by directive
     const externalOrigins = {
@@ -101,104 +109,108 @@ async function createCSP() {
         'media-src': new Set(),
         'object-src': new Set(),
         'worker-src': new Set(),
-        'manifest-src': new Set()
-    };
+        'manifest-src': new Set(),
+    }
     
     // Track if inline scripts/styles are detected
-    let hasInlineScripts = false;
-    let hasInlineStyles = false;
+    let hasInlineScripts = false
+    let hasInlineStyles = false
     
     // Intercept network requests to categorize resources
-    await page.setRequestInterception(true);
+    await page.setRequestInterception(true)
     
     page.on('request', request => {
-        const url = request.url();
-        const resourceType = request.resourceType();
+        const url = request.url()
+        const resourceType = request.resourceType()
         
         try {
-            const origin = new URL(url).origin;
+            const origin = new URL(url).origin
             
             if (origin !== baseOrigin && origin.startsWith('http')) {
                 switch (resourceType) {
                     case 'script':
-                        externalOrigins['script-src'].add(origin);
-                        break;
+                        externalOrigins['script-src'].add(origin)
+                        break
                     case 'stylesheet':
-                        externalOrigins['style-src'].add(origin);
-                        break;
+                        externalOrigins['style-src'].add(origin)
+                        break
                     case 'image':
-                        externalOrigins['img-src'].add(origin);
-                        break;
+                        externalOrigins['img-src'].add(origin)
+                        break
                     case 'font':
-                        externalOrigins['font-src'].add(origin);
-                        break;
+                        externalOrigins['font-src'].add(origin)
+                        break
                     case 'xhr':
                     case 'fetch':
-                        externalOrigins['connect-src'].add(origin);
-                        break;
+                        externalOrigins['connect-src'].add(origin)
+                        break
                     case 'sub_frame':
-                        externalOrigins['frame-src'].add(origin);
-                        break;
+                        externalOrigins['frame-src'].add(origin)
+                        break
                     case 'media':
-                        externalOrigins['media-src'].add(origin);
-                        break;
+                        externalOrigins['media-src'].add(origin)
+                        break
                     case 'object':
-                        externalOrigins['object-src'].add(origin);
-                        break;
+                        externalOrigins['object-src'].add(origin)
+                        break
                     case 'worker':
-                        externalOrigins['worker-src'].add(origin);
-                        break;
+                        externalOrigins['worker-src'].add(origin)
+                        break
                     case 'manifest':
-                        externalOrigins['manifest-src'].add(origin);
-                        break;
+                        externalOrigins['manifest-src'].add(origin)
+                        break
                 }
             }
         } catch (e) {
             // Invalid URL, skip
         }
         
-        request.continue();
-    });
+        request.continue()
+    })
     
     // Collect all page URLs
-    const visited = new Set();
-    const toVisit = [config.baseUrl];
+    const visited = new Set()
+    const toVisit = [ config.baseUrl ]
     
     while (toVisit.length > 0 && visited.size < config.maxPages) {
-        const currentUrl = toVisit.shift();
+        const currentUrl = toVisit.shift()
         
-        if (visited.has(currentUrl)) continue;
+        if (visited.has(currentUrl)) {continue}
         
         try {
-            console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`);
+            console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`)
             
-            await page.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 });
-            visited.add(currentUrl);
+            await page.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 })
+            visited.add(currentUrl)
             
             // Check for inline scripts and styles
             const inlineCheck = await page.evaluate(() => {
-                const scripts = Array.from(document.querySelectorAll('script:not([src])'));
-                const styles = Array.from(document.querySelectorAll('style'));
-                const inlineStyleAttrs = Array.from(document.querySelectorAll('[style]'));
-                const inlineEventHandlers = Array.from(document.querySelectorAll('[onclick], [onload], [onerror], [onmouseover], [onsubmit], [onchange], [onfocus], [onblur]'));
+                const scripts = Array.from(document.querySelectorAll('script:not([src])'))
+                const styles = Array.from(document.querySelectorAll('style'))
+                const inlineStyleAttrs = Array.from(document.querySelectorAll('[style]'))
+                const inlineEventHandlers = Array.from(document.querySelectorAll('[onclick], [onload], [onerror], [onmouseover], [onsubmit], [onchange], [onfocus], [onblur]'))
                 
                 return {
                     hasInlineScripts: scripts.some(s => s.textContent.trim().length > 0) || inlineEventHandlers.length > 0,
-                    hasInlineStyles: styles.length > 0 || inlineStyleAttrs.length > 0
-                };
-            });
+                    hasInlineStyles: styles.length > 0 || inlineStyleAttrs.length > 0,
+                }
+            })
             
-            if (inlineCheck.hasInlineScripts) hasInlineScripts = true;
-            if (inlineCheck.hasInlineStyles) hasInlineStyles = true;
+            if (inlineCheck.hasInlineScripts) {hasInlineScripts = true}
+
+            if (inlineCheck.hasInlineStyles) {hasInlineStyles = true}
             
             // Extract links from current page
-            const links = await page.evaluate((baseUrl) => {
-                const anchors = Array.from(document.querySelectorAll('a[href]'));
+            const links = await page.evaluate(baseUrl => {
+                const anchors = Array.from(document.querySelectorAll('a[href]'))
+
                 return anchors
                     .map(a => {
-                        const url = new URL(a.href);
-                        url.hash = '';
-                        return url.toString();
+                        const url = new URL(a.href)
+
+                        url.hash = ''
+
+                        return url.toString()
                     })
                     .filter(href => href.startsWith(baseUrl))
                     .filter(href => !href.includes('tel:'))
@@ -207,83 +219,89 @@ async function createCSP() {
                     .filter(href => !href.includes('.jpg'))
                     .filter(href => !href.includes('.png'))
                     .filter((href, index, arr) => arr.indexOf(href) === index)
-                    .slice(0, 25);
-            }, config.baseUrl);
+                    .slice(0, 25)
+            }, config.baseUrl)
             
             // Add new links to visit queue
             links.forEach(link => {
                 if (!visited.has(link) && !toVisit.includes(link)) {
-                    toVisit.push(link);
+                    toVisit.push(link)
                 }
-            });
+            })
             
-            console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`);
+            console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`)
             
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000))
             
         } catch (error) {
-            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`);
+            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`)
         }
     }
     
-    await browser.close();
+    await browser.close()
     
     // Build CSP policy
-    const policy = {};
+    const policy = {}
     
-    for (const [directive, origins] of Object.entries(externalOrigins)) {
-        const originList = Array.from(origins).sort();
+    for (const [ directive, origins ] of Object.entries(externalOrigins)) {
+        const originList = Array.from(origins).sort()
+
         if (originList.length > 0 || directive === 'script-src' || directive === 'style-src') {
-            policy[directive] = ["'self'", ...originList];
+            policy[directive] = [ "'self'", ...originList ]
         }
     }
     
     // Add 'unsafe-inline' if needed
     if (hasInlineScripts && policy['script-src']) {
-        policy['script-src'].push("'unsafe-inline'");
+        policy['script-src'].push("'unsafe-inline'")
     }
+
     if (hasInlineStyles && policy['style-src']) {
-        policy['style-src'].push("'unsafe-inline'");
+        policy['style-src'].push("'unsafe-inline'")
     }
     
     // Ensure default-src and base-uri exist
-    policy['default-src'] = ["'self'"];
-    policy['base-uri'] = ["'self'"];
+    policy['default-src'] = [ "'self'" ]
+    policy['base-uri'] = [ "'self'" ]
     
     // Always include data: for img-src (data URLs are common)
     if (!policy['img-src']) {
-        policy['img-src'] = ["'self'"];
+        policy['img-src'] = [ "'self'" ]
     }
+
     if (!policy['img-src'].includes('data:')) {
-        policy['img-src'].push('data:');
+        policy['img-src'].push('data:')
     }
     
     // Template prompts
-    const templates = loadTemplates();
-    const includedTemplates = [];
+    const templates = loadTemplates()
+    const includedTemplates = []
     
     if (templates.length > 0) {
-        console.log('');
-        const includeTemplates = await askYesNo('Do you wish to include template sources in this report?');
+        console.log('')
+        const includeTemplates = await askYesNo('Do you wish to include template sources in this report?')
         
         if (includeTemplates) {
             for (const template of templates) {
-                const include = await askYesNo(`  Include ${template.name}?`);
+                const include = await askYesNo(`  Include ${template.name}?`)
+
                 if (include) {
-                    mergeTemplate(policy, template);
-                    includedTemplates.push(template.name);
-                    console.log(`    ✅ Added ${template.name}`);
+                    mergeTemplate(policy, template)
+                    includedTemplates.push(template.name)
+                    console.log(`    ✅ Added ${template.name}`)
                 }
             }
         }
     }
     
     // Build header string
-    const headerParts = [];
-    for (const [directive, sources] of Object.entries(policy)) {
-        headerParts.push(`${directive} ${sources.join(' ')}`);
+    const headerParts = []
+
+    for (const [ directive, sources ] of Object.entries(policy)) {
+        headerParts.push(`${directive} ${sources.join(' ')}`)
     }
-    const headerString = headerParts.join('; ');
+
+    const headerString = headerParts.join('; ')
     
     // Save results
     const results = {
@@ -293,24 +311,25 @@ async function createCSP() {
         hasInlineStyles,
         includedTemplates,
         policy,
-        header: headerString
-    };
+        header: headerString,
+    }
     
-    fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2));
+    fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
     
-    console.log('\n🏁 CSP Creation Complete!');
-    console.log(`📊 Pages scanned: ${visited.size}`);
-    console.log(`📄 Results saved to: ${config.outputFile}`);
+    console.log('\n🏁 CSP Creation Complete!')
+    console.log(`📊 Pages scanned: ${visited.size}`)
+    console.log(`📄 Results saved to: ${config.outputFile}`)
     
     if (hasInlineScripts) {
-        console.log(`⚠️  Inline scripts detected - 'unsafe-inline' added to script-src`);
+        console.log(`⚠️  Inline scripts detected - 'unsafe-inline' added to script-src`)
     }
+
     if (hasInlineStyles) {
-        console.log(`⚠️  Inline styles detected - 'unsafe-inline' added to style-src`);
+        console.log(`⚠️  Inline styles detected - 'unsafe-inline' added to style-src`)
     }
     
-    console.log('\n📋 Generated CSP Header:');
-    console.log(headerString);
+    console.log('\n📋 Generated CSP Header:')
+    console.log(headerString)
 }
 
-createCSP().catch(console.error);
+createCSP().catch(console.error)

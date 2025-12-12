@@ -4,10 +4,14 @@
     "check": "node scripts/csp-validator.js",
     "clear-reports": "node scripts/clear-reports.js",
     "create": "node scripts/csp-create.js",
+    "lint": "eslint . --fix",
     "validate": "node scripts/csp-validator.js"
   },
   "devDependencies": {
+    "@eslint/json": "^0.14.0",
     "dotenv": "^17.2.3",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
     "puppeteer": "^24.31.0"
   }
 }

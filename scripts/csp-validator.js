@@ -1,89 +1,95 @@
-import 'dotenv/config';
-import puppeteer from 'puppeteer';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import 'dotenv/config'
+import puppeteer from 'puppeteer'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const reportsDir = path.join(__dirname, '..', 'reports');
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const reportsDir = path.join(__dirname, '..', 'reports')
 
 function getTimestampedFilename(prefix) {
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    return path.join(reportsDir, `${prefix}-${timestamp}.json`);
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+
+    return path.join(reportsDir, `${prefix}-${timestamp}.json`)
 }
 
 if (!process.env.BASE_URL) {
-    console.error('❌ BASE_URL environment variable is required');
-    process.exit(1);
+    console.error('❌ BASE_URL environment variable is required')
+    process.exit(1)
 }
 
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
     outputFile: getTimestampedFilename('csp-violations'),
-    headless: process.env.HEADLESS === 'true'
-};
+    headless: process.env.HEADLESS === 'true',
+}
 
 async function crawlSite() {
-    console.log('🔍 Starting CSP crawler...');
+    console.log('🔍 Starting CSP crawler...')
     
     const browser = await puppeteer.launch({ 
         headless: config.headless,
-        devtools: false 
-    });
+        devtools: false, 
+    })
     
-    const page = await browser.newPage();
+    const page = await browser.newPage()
     
     // Collect CSP violations
-    const violations = [];
+    const violations = []
     
     page.on('response', response => {
-        const cspHeader = response.headers()['content-security-policy-report-only'];
+        const cspHeader = response.headers()['content-security-policy-report-only']
+
         if (!cspHeader) {
-            console.log(`⚠️  No CSP header on: ${response.url()}`);
+            console.log(`⚠️  No CSP header on: ${response.url()}`)
         }
-    });
+    })
     
     // Listen for console errors (including CSP violations)
     page.on('console', msg => {
-        const text = msg.text();
+        const text = msg.text()
+
         if (text.includes('[Report Only]') || text.includes('Content Security Policy')) {
             violations.push({
                 url: page.url(),
                 timestamp: new Date().toISOString(),
                 violation: text,
-                type: 'console'
-            });
-            console.log(`🚫 CSP Violation found on ${page.url()}`);
-            console.log(`   ${text}`);
+                type: 'console',
+            })
+            console.log(`🚫 CSP Violation found on ${page.url()}`)
+            console.log(`   ${text}`)
         }
-    });
+    })
     
     // Collect all page URLs
-    const visited = new Set();
-    const toVisit = [config.baseUrl];
+    const visited = new Set()
+    const toVisit = [ config.baseUrl ]
     
     while (toVisit.length > 0 && visited.size < config.maxPages) {
-        const currentUrl = toVisit.shift();
+        const currentUrl = toVisit.shift()
         
-        if (visited.has(currentUrl)) continue;
+        if (visited.has(currentUrl)) {continue}
         
         try {
-            console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`);
+            console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`)
             
-            await page.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 });
-            visited.add(currentUrl);
+            await page.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 })
+            visited.add(currentUrl)
             
             // Extract links from current page
-            const links = await page.evaluate((baseUrl) => {
-                const anchors = Array.from(document.querySelectorAll('a[href]'));
+            const links = await page.evaluate(baseUrl => {
+                const anchors = Array.from(document.querySelectorAll('a[href]'))
+
                 return anchors
                     .map(a => {
                         // Clean the URL - remove fragments but keep query params
-                        const url = new URL(a.href);
-                        url.hash = ''; // Remove fragment (#section)
-                        return url.toString();
+                        const url = new URL(a.href)
+
+                        url.hash = '' // Remove fragment (#section)
+
+                        return url.toString()
                     })
                     .filter(href => href.startsWith(baseUrl))
                     .filter(href => !href.includes('tel:'))
@@ -93,57 +99,59 @@ async function crawlSite() {
                     .filter(href => !href.includes('.png'))
                     // Remove duplicates
                     .filter((href, index, arr) => arr.indexOf(href) === index)
-                    .slice(0, 25); // Increased from 10 to 25 links per page
-            }, config.baseUrl);
+                    .slice(0, 25) // Increased from 10 to 25 links per page
+            }, config.baseUrl)
             
             // Add new links to visit queue
-            const newLinks = [];
+            const newLinks = []
+
             links.forEach(link => {
                 if (!visited.has(link) && !toVisit.includes(link)) {
-                    toVisit.push(link);
-                    newLinks.push(link);
+                    toVisit.push(link)
+                    newLinks.push(link)
                 }
-            });
+            })
             
-            console.log(`   📄 Found ${links.length} total links, ${newLinks.length} new links to visit`);
-            console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`);
+            console.log(`   📄 Found ${links.length} total links, ${newLinks.length} new links to visit`)
+            console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`)
             
             // Wait a bit between requests
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1000))
             
         } catch (error) {
-            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`);
+            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`)
         }
     }
     
-    await browser.close();
+    await browser.close()
     
     // Save results
     const results = {
         timestamp: new Date().toISOString(),
         pagesScanned: Array.from(visited),
         totalViolations: violations.length,
-        violations: violations
-    };
+        violations: violations,
+    }
     
-    fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2));
+    fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
     
-    console.log('\n🏁 Crawl Complete!');
-    console.log(`📊 Pages scanned: ${visited.size}`);
-    console.log(`🚫 CSP violations found: ${violations.length}`);
-    console.log(`📄 Results saved to: ${config.outputFile}`);
+    console.log('\n🏁 Crawl Complete!')
+    console.log(`📊 Pages scanned: ${visited.size}`)
+    console.log(`🚫 CSP violations found: ${violations.length}`)
+    console.log(`📄 Results saved to: ${config.outputFile}`)
     
     if (violations.length > 0) {
-        console.log('\n🔍 Unique violation types:');
-        const uniqueViolations = [...new Set(violations.map(v => v.violation))];
-        uniqueViolations.forEach(v => console.log(`   - ${v}`));
+        console.log('\n🔍 Unique violation types:')
+        const uniqueViolations = [ ...new Set(violations.map(v => v.violation)) ]
+
+        uniqueViolations.forEach(v => console.log(`   - ${v}`))
     }
 }
 
 // Check if puppeteer is available
 try {
-    crawlSite().catch(console.error);
+    crawlSite().catch(console.error)
 } catch (error) {
-    console.log('❌ Puppeteer not installed. Install with:');
-    console.log('   npm install puppeteer');
+    console.log('❌ Puppeteer not installed. Install with:')
+    console.log('   npm install puppeteer')
 }
