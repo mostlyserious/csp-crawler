@@ -249,6 +249,14 @@ async function createCSP() {
     // Ensure default-src exists
     policy['default-src'] = ["'self'"];
     
+    // Always include data: for img-src (data URLs are common)
+    if (!policy['img-src']) {
+        policy['img-src'] = ["'self'"];
+    }
+    if (!policy['img-src'].includes('data:')) {
+        policy['img-src'].push('data:');
+    }
+    
     // Template prompts
     const templates = loadTemplates();
     const includedTemplates = [];
