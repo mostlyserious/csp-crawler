@@ -22,9 +22,12 @@ if (!process.env.BASE_URL) {
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
+    maxLinksPerPage: parseInt(process.env.MAX_LINKS_PER_PAGE || '250', 10),
     outputFile: getTimestampedFilename('csp-violations'),
     headless: process.env.HEADLESS === 'true',
 }
+
+const baseOrigin = new URL(config.baseUrl).origin
 
 async function crawlSite() {
     console.log('🔍 Starting CSP crawler...')
@@ -47,7 +50,11 @@ async function crawlSite() {
 
         const url = response.url()
 
-        if (!url.startsWith(config.baseUrl)) {return}
+        try {
+            if (new URL(url).origin !== baseOrigin) {return}
+        } catch (_e) {
+            return
+        }
 
         const headers = response.headers()
         const cspHeader = headers['content-security-policy']
@@ -91,17 +98,20 @@ async function crawlSite() {
             visited.add(currentUrl)
             
             // Extract links from current page
-            const links = await page.evaluate(baseUrl => {
+            const links = await page.evaluate(({ baseOrigin, maxLinksPerPage }) => {
                 const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                 return anchors
                     .map(a => {
                         try {
-                            const url = new URL(a.href, document.baseURI)
+                            const rawHref = a.getAttribute('href') || ''
+                            const url = new URL(rawHref, document.baseURI)
 
                             if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
 
                             url.hash = ''
+
+                            if (url.origin !== baseOrigin) {return null}
 
                             return url.toString()
                         } catch (_e) {
@@ -109,15 +119,14 @@ async function crawlSite() {
                         }
                     })
                     .filter(Boolean)
-                    .filter(href => href.startsWith(baseUrl))
                     .filter(href => !href.toLowerCase().includes('.pdf'))
                     .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
                     .filter(href => !href.includes('tel:'))
                     .filter(href => !href.includes('mailto:'))
                     // Remove duplicates
                     .filter((href, index, arr) => arr.indexOf(href) === index)
-                    .slice(0, 25) // Increased from 10 to 25 links per page
-            }, config.baseUrl)
+                    .slice(0, maxLinksPerPage)
+            }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
             
             // Add new links to visit queue
             const newLinks = []

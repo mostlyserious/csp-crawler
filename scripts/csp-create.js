@@ -24,6 +24,7 @@ if (!process.env.BASE_URL) {
 const config = {
     baseUrl: process.env.BASE_URL,
     maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
+    maxLinksPerPage: parseInt(process.env.MAX_LINKS_PER_PAGE || '250', 10),
     outputFile: getTimestampedFilename('csp-policy'),
     headless: process.env.HEADLESS === 'true',
 }
@@ -201,17 +202,20 @@ async function createCSP() {
             if (inlineCheck.hasInlineStyles) {hasInlineStyles = true}
             
             // Extract links from current page
-            const links = await page.evaluate(baseUrl => {
+            const links = await page.evaluate(({ baseOrigin, maxLinksPerPage }) => {
                 const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                 return anchors
                     .map(a => {
                         try {
-                            const url = new URL(a.href, document.baseURI)
+                            const rawHref = a.getAttribute('href') || ''
+                            const url = new URL(rawHref, document.baseURI)
 
                             if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
 
                             url.hash = ''
+
+                            if (url.origin !== baseOrigin) {return null}
 
                             return url.toString()
                         } catch (_e) {
@@ -219,14 +223,11 @@ async function createCSP() {
                         }
                     })
                     .filter(Boolean)
-                    .filter(href => href.startsWith(baseUrl))
                     .filter(href => !href.toLowerCase().includes('.pdf'))
                     .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
-                    .filter(href => !href.includes('tel:'))
-                    .filter(href => !href.includes('mailto:'))
                     .filter((href, index, arr) => arr.indexOf(href) === index)
-                    .slice(0, 25)
-            }, config.baseUrl)
+                    .slice(0, maxLinksPerPage)
+            }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
             
             // Add new links to visit queue
             links.forEach(link => {

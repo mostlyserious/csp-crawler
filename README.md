@@ -29,6 +29,7 @@ Results are saved to the file specified in `OUTPUT_FILE` (default: `csp-violatio
 |----------|----------|---------|-------------|
 | `BASE_URL` | Yes | — | Target site URL |
 | `MAX_PAGES` | No | `1000` | Max pages to crawl |
+| `MAX_LINKS_PER_PAGE` | No | `250` | Max number of same-origin links to enqueue per page (useful for sitemap/index pages) |
 | `OUTPUT_FILE` | No | `csp-violations-detailed.json` | Output filename |
 | `HEADLESS` | No | `false` | Run browser headless |
 
