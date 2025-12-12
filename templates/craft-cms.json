@@ -1,0 +1,8 @@
+{
+  "name": "Craft CMS",
+  "directives": {
+    "img-src": [
+      "*.craft-cdn.com"
+    ]
+  }
+}
