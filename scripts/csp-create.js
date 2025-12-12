@@ -206,18 +206,24 @@ async function createCSP() {
 
                 return anchors
                     .map(a => {
-                        const url = new URL(a.href)
+                        try {
+                            const url = new URL(a.href, document.baseURI)
 
-                        url.hash = ''
+                            if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
 
-                        return url.toString()
+                            url.hash = ''
+
+                            return url.toString()
+                        } catch (_e) {
+                            return null
+                        }
                     })
+                    .filter(Boolean)
                     .filter(href => href.startsWith(baseUrl))
+                    .filter(href => !href.toLowerCase().includes('.pdf'))
+                    .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
                     .filter(href => !href.includes('tel:'))
                     .filter(href => !href.includes('mailto:'))
-                    .filter(href => !href.includes('.pdf'))
-                    .filter(href => !href.includes('.jpg'))
-                    .filter(href => !href.includes('.png'))
                     .filter((href, index, arr) => arr.indexOf(href) === index)
                     .slice(0, 25)
             }, config.baseUrl)

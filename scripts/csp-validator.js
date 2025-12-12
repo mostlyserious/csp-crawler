@@ -96,19 +96,24 @@ async function crawlSite() {
 
                 return anchors
                     .map(a => {
-                        // Clean the URL - remove fragments but keep query params
-                        const url = new URL(a.href)
+                        try {
+                            const url = new URL(a.href, document.baseURI)
 
-                        url.hash = '' // Remove fragment (#section)
+                            if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
 
-                        return url.toString()
+                            url.hash = ''
+
+                            return url.toString()
+                        } catch (_e) {
+                            return null
+                        }
                     })
+                    .filter(Boolean)
                     .filter(href => href.startsWith(baseUrl))
+                    .filter(href => !href.toLowerCase().includes('.pdf'))
+                    .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
                     .filter(href => !href.includes('tel:'))
                     .filter(href => !href.includes('mailto:'))
-                    .filter(href => !href.includes('.pdf'))
-                    .filter(href => !href.includes('.jpg'))
-                    .filter(href => !href.includes('.png'))
                     // Remove duplicates
                     .filter((href, index, arr) => arr.indexOf(href) === index)
                     .slice(0, 25) // Increased from 10 to 25 links per page
@@ -152,7 +157,7 @@ async function crawlSite() {
     console.log(`\ud83d\udcca Pages scanned: ${visited.size}`)
     console.log(`\ud83d\udeab CSP violations found: ${violations.length}`)
     console.log(`\u26a0\ufe0f Pages without CSP header: ${pagesWithoutCsp.size}`)
-    console.log(`\ud83d\dcd4 Results saved to: ${config.outputFile}`)
+    console.log(`\ud83ddcd4 Results saved to: ${config.outputFile}`)
     
     if (violations.length > 0) {
         console.log('\n🔍 Unique violation types:')
