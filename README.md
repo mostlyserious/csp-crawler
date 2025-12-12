@@ -16,9 +16,9 @@ Edit `.env` with your target URL.
 ## Usage
 
 ```bash
-npm run crawl
+npm run validate
 # or with bun:
-# bun run crawl
+# bun run validate
 ```
 
 Results are saved to the file specified in `OUTPUT_FILE` (default: `csp-violations-detailed.json`).

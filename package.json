@@ -1,7 +1,9 @@
 {
   "type": "module",
   "scripts": {
-    "crawl": "node scripts/csp-crawler.js"
+    "check": "node scripts/csp-validator.js",
+    "create": "node scripts/csp-create.js",
+    "validate": "node scripts/csp-validator.js"
   },
   "devDependencies": {
     "dotenv": "^17.2.3",
