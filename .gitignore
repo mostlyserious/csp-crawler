@@ -1,0 +1,10 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Results
+*.json
+!package.json
+!package-lock.json

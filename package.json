@@ -1,0 +1,10 @@
+{
+  "type": "module",
+  "scripts": {
+    "crawl": "node scripts/csp-crawler.js"
+  },
+  "devDependencies": {
+    "dotenv": "^17.2.3",
+    "puppeteer": "^24.31.0"
+  }
+}
