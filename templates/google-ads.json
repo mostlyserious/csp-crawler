@@ -1,0 +1,21 @@
+{
+  "name": "Google Ads",
+  "directives": {
+    "script-src": [
+      "https://*.googlesyndication.com",
+      "https://*.googleadservices.com"
+    ],
+    "img-src": [
+      "https://*.googlesyndication.com",
+      "https://*.googleadservices.com"
+    ],
+    "frame-src": [
+      "https://*.googlesyndication.com",
+      "https://*.doubleclick.net"
+    ],
+    "connect-src": [
+      "https://*.googlesyndication.com",
+      "https://*.googleadservices.com"
+    ]
+  }
+}
