@@ -1,31 +1,10 @@
 import 'dotenv/config'
 import puppeteer from 'puppeteer'
 import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import { getCommonConfig, getScriptDirs } from './script-utils.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const reportsDir = path.join(__dirname, '..', 'reports')
-
-function getTimestampedFilename(prefix) {
-    const now = new Date()
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
-
-    return path.join(reportsDir, `${prefix}-${timestamp}.json`)
-}
-
-if (!process.env.BASE_URL) {
-    console.error('❌ BASE_URL environment variable is required')
-    process.exit(1)
-}
-
-const config = {
-    baseUrl: process.env.BASE_URL,
-    maxPages: parseInt(process.env.MAX_PAGES || '1000', 10),
-    maxLinksPerPage: parseInt(process.env.MAX_LINKS_PER_PAGE || '250', 10),
-    outputFile: getTimestampedFilename('csp-violations'),
-    headless: process.env.HEADLESS === 'true',
-}
+const { reportsDir } = getScriptDirs(import.meta.url)
+const config = getCommonConfig({ reportPrefix: 'csp-violations', reportsDir })
 
 const baseOrigin = new URL(config.baseUrl).origin
 

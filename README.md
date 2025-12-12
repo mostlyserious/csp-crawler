@@ -2,6 +2,10 @@
 
 Crawls a website and collects Content Security Policy violations.
 
+## Requirements
+
+Bun (latest) or Node.js `>= 18`.
+
 ## Setup
 
 ```bash
@@ -13,25 +17,43 @@ cp .env.example .env
 
 Edit `.env` with your target URL.
 
+You can also provide the target URL via CLI with `--baseUrl`, which overrides `.env`.
+
 ## Usage
 
 ```bash
 npm run validate
 # or with bun:
 # bun run validate
+
+# override BASE_URL from .env:
+npm run validate -- --baseUrl https://example.com
+# or with bun:
+# bun run validate -- --baseUrl https://example.com
+
+# create a CSP policy report (also supports --baseUrl):
+npm run create -- --baseUrl https://example.com
+
+# other supported flags (CLI overrides .env):
+# --maxPages / --max-pages
+# --maxLinksPerPage / --max-links-per-page
+# --headless
+# --outputFile / --output-file
 ```
 
-Results are saved to the file specified in `OUTPUT_FILE` (default: `csp-violations-detailed.json`).
+Results are saved to a timestamped file in `reports/` by default.
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `BASE_URL` | Yes | — | Target site URL |
+| `BASE_URL` | Yes* | — | Target site URL (can also be provided via `--baseUrl`) |
 | `MAX_PAGES` | No | `1000` | Max pages to crawl |
 | `MAX_LINKS_PER_PAGE` | No | `250` | Max number of same-origin links to enqueue per page (useful for sitemap/index pages) |
-| `OUTPUT_FILE` | No | `csp-violations-detailed.json` | Output filename |
+| `OUTPUT_FILE` | No | Timestamped in `reports/` | Output file path (can also be provided via `--outputFile`) |
 | `HEADLESS` | No | `false` | Run browser headless |
+
+*`BASE_URL` is required unless you pass `--baseUrl`.
 
 ## Templates
 
