@@ -38,12 +38,24 @@ async function crawlSite() {
     
     // Collect CSP violations
     const violations = []
+    const pagesWithoutCsp = new Set()
     
     page.on('response', response => {
-        const cspHeader = response.headers()['content-security-policy-report-only']
+        const request = response.request()
 
-        if (!cspHeader) {
-            console.log(`⚠️  No CSP header on: ${response.url()}`)
+        if (request.resourceType() !== 'document') {return}
+
+        const url = response.url()
+
+        if (!url.startsWith(config.baseUrl)) {return}
+
+        const headers = response.headers()
+        const cspHeader = headers['content-security-policy']
+        const cspReportOnly = headers['content-security-policy-report-only']
+
+        if (!cspHeader && !cspReportOnly && !pagesWithoutCsp.has(url)) {
+            pagesWithoutCsp.add(url)
+            console.log(`⚠️  No CSP header on document: ${url}`)
         }
     })
     
@@ -129,16 +141,18 @@ async function crawlSite() {
     const results = {
         timestamp: new Date().toISOString(),
         pagesScanned: Array.from(visited),
+        pagesWithoutCsp: Array.from(pagesWithoutCsp),
         totalViolations: violations.length,
         violations: violations,
     }
     
     fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
     
-    console.log('\n🏁 Crawl Complete!')
-    console.log(`📊 Pages scanned: ${visited.size}`)
-    console.log(`🚫 CSP violations found: ${violations.length}`)
-    console.log(`📄 Results saved to: ${config.outputFile}`)
+    console.log('\n\uD83C\uDFC1 Crawl Complete!')
+    console.log(`\ud83d\udcca Pages scanned: ${visited.size}`)
+    console.log(`\ud83d\udeab CSP violations found: ${violations.length}`)
+    console.log(`\u26a0\ufe0f Pages without CSP header: ${pagesWithoutCsp.size}`)
+    console.log(`\ud83d\dcd4 Results saved to: ${config.outputFile}`)
     
     if (violations.length > 0) {
         console.log('\n🔍 Unique violation types:')
