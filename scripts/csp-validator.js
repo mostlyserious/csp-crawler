@@ -10,6 +10,7 @@ const baseOrigin = new URL(config.baseUrl).origin
 
 async function crawlSite() {
     console.log('🔍 Starting CSP crawler...')
+    console.log(`📍 Base URL: ${config.baseUrl}`)
     
     const browser = await puppeteer.launch({ 
         headless: config.headless,
@@ -17,6 +18,26 @@ async function crawlSite() {
     })
     
     const page = await browser.newPage()
+
+    await page.setRequestInterception(true)
+
+    page.on('request', request => {
+        if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
+            try {
+                if (new URL(request.url()).origin !== baseOrigin) {
+                    request.abort()
+
+                    return
+                }
+            } catch (_e) {
+                request.abort()
+
+                return
+            }
+        }
+
+        request.continue()
+    })
     
     // Collect CSP violations
     const violations = []
@@ -63,12 +84,15 @@ async function crawlSite() {
     
     // Collect all page URLs
     const visited = new Set()
+    const failed = new Set()
     const toVisit = [ config.baseUrl ]
     
     while (toVisit.length > 0 && visited.size < config.maxPages) {
         const currentUrl = toVisit.shift()
         
         if (visited.has(currentUrl)) {continue}
+
+        if (failed.has(currentUrl)) {continue}
         
         try {
             console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`)
@@ -111,7 +135,7 @@ async function crawlSite() {
             const newLinks = []
 
             links.forEach(link => {
-                if (!visited.has(link) && !toVisit.includes(link)) {
+                if (!visited.has(link) && !failed.has(link) && !toVisit.includes(link)) {
                     toVisit.push(link)
                     newLinks.push(link)
                 }
@@ -124,7 +148,8 @@ async function crawlSite() {
             await new Promise(resolve => setTimeout(resolve, 1000))
             
         } catch (error) {
-            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`)
+            failed.add(currentUrl)
+            console.log(`❌ Error visiting ${currentUrl}: ${error.message} - possible redirect or network issue.`)
         }
     }
     
@@ -141,11 +166,11 @@ async function crawlSite() {
     
     fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
     
-    console.log('\n\uD83C\uDFC1 Crawl Complete!')
-    console.log(`\ud83d\udcca Pages scanned: ${visited.size}`)
-    console.log(`\ud83d\udeab CSP violations found: ${violations.length}`)
-    console.log(`\u26a0\ufe0f Pages without CSP header: ${pagesWithoutCsp.size}`)
-    console.log(`\ud83ddcd4 Results saved to: ${config.outputFile}`)
+    console.log('Crawl Complete!')
+    console.log(`Pages scanned: ${visited.size}`)
+    console.log(`CSP violations found: ${violations.length}`)
+    console.log(`Pages without CSP header: ${pagesWithoutCsp.size}`)
+    console.log(`Results saved to: ${config.outputFile}`)
     
     if (violations.length > 0) {
         console.log('\n🔍 Unique violation types:')

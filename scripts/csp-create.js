@@ -100,6 +100,20 @@ async function createCSP() {
     await page.setRequestInterception(true)
     
     page.on('request', request => {
+        if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
+            try {
+                if (new URL(request.url()).origin !== baseOrigin) {
+                    request.abort()
+
+                    return
+                }
+            } catch (_e) {
+                request.abort()
+
+                return
+            }
+        }
+
         const url = request.url()
         const resourceType = request.resourceType()
         
@@ -220,7 +234,7 @@ async function createCSP() {
             await new Promise(resolve => setTimeout(resolve, 1000))
             
         } catch (error) {
-            console.log(`❌ Error visiting ${currentUrl}: ${error.message}`)
+            console.log(`❌ Error visiting ${currentUrl}: ${error.message} - possible redirect or network issue.`)
         }
     }
     
