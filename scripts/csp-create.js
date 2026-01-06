@@ -90,6 +90,7 @@ async function createCSP() {
     let hasInlineStyles = false
     
     const crawlResults = await sharedCrawlSite({
+        action: 'CREATE Content Security Policy',
         onRequestIntercept: request => {
             const url = request.url()
             const resourceType = request.resourceType()

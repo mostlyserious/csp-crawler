@@ -45,6 +45,8 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             headless: { type: 'boolean' },
             outputFile: { type: 'string' },
             'output-file': { type: 'string' },
+            yes: { type: 'boolean' },
+            skipConfirmation: { type: 'boolean' },
         },
         strict: false,
         allowPositionals: true,
@@ -76,6 +78,9 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const cliOutputFile = values.outputFile || values['output-file']
     const outputFile = cliOutputFile || env.OUTPUT_FILE || getTimestampedFilename(reportsDir, reportPrefix)
 
+    const cliSkipConfirmation = values.yes || values.skipConfirmation
+    const skipConfirmation = typeof cliSkipConfirmation === 'boolean' ? cliSkipConfirmation : env.SKIP_CONFIRMATION === 'true'
+
     return {
         baseUrl,
         maxPages,
@@ -83,5 +88,6 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         maxDepth,
         outputFile,
         headless,
+        skipConfirmation,
     }
 }

@@ -40,6 +40,7 @@ npm run create -- --baseUrl https://example.com
 # --maxDepth / --max-depth
 # --headless
 # --outputFile / --output-file
+# --yes / --skipConfirmation (skip confirmation prompt)
 ```
 
 Results are saved to a timestamped file in `reports/` by default.
@@ -54,6 +55,7 @@ Results are saved to a timestamped file in `reports/` by default.
 | `MAX_DEPTH` | No | `10` | Max crawl depth (0 = only base page, 1 = base page + links from it, etc.) |
 | `OUTPUT_FILE` | No | Timestamped in `reports/` | Output file path (can also be provided via `--outputFile`) |
 | `HEADLESS` | No | `false` | Run browser headless |
+| `SKIP_CONFIRMATION` | No | `false` | Skip confirmation prompt (for automated usage) |
 
 *`BASE_URL` is required unless you pass `--baseUrl`.
 

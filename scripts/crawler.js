@@ -1,5 +1,35 @@
 import puppeteer from 'puppeteer'
+import readline from 'readline'
 import { getCommonConfig } from './script-utils.js'
+
+// Confirmation helper function
+function prompt(question) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    })
+
+    return new Promise(resolve => {
+        rl.question(question, answer => {
+            rl.close()
+            resolve(answer.toLowerCase().trim())
+        })
+    })
+}
+
+async function confirmCrawl(config, action) {
+    console.log('\n📋 Crawl Configuration:')
+    console.log(`   Action: ${action}`)
+    console.log(`   URL: ${config.baseUrl}`)
+    console.log(`   Max Pages: ${config.maxPages}`)
+    console.log(`   Max Links Per Page: ${config.maxLinksPerPage}`)
+    console.log(`   Max Depth: ${config.maxDepth}`)
+    console.log(`   Headless: ${config.headless}`)
+    
+    const answer = await prompt('\nAre you ready to proceed? (y/n): ')
+
+    return answer === 'y' || answer === 'yes'
+}
 
 /**
  * Shared web crawler utility for CSP analysis
@@ -12,6 +42,8 @@ import { getCommonConfig } from './script-utils.js'
  * @param {Function} options.onPageVisit - Callback for each page visit
  * @param {Function} options.onRequestIntercept - Optional request interception callback
  * @param {Function} options.onConsoleMessage - Optional console message callback
+ * @param {string} options.action - Action description for confirmation (e.g., "VALIDATE", "CREATE")
+ * @param {boolean} options.skipConfirmation - Skip confirmation prompt (default: false)
  * @returns {Promise<Object>} Crawl results
  */
 export async function crawlSite(options = {}) {
@@ -23,6 +55,16 @@ export async function crawlSite(options = {}) {
     })
     
     const baseOrigin = new URL(config.baseUrl).origin
+    
+    // Confirmation prompt
+    if (!options.skipConfirmation && !config.skipConfirmation) {
+        const confirmed = await confirmCrawl(config, options.action || 'ANALYZE')
+
+        if (!confirmed) {
+            console.log('❌ Crawl cancelled by user.')
+            process.exit(0)
+        }
+    }
     
     console.log('🔍 Starting crawler...')
     console.log(`📍 Base URL: ${config.baseUrl}`)

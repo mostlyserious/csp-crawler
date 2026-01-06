@@ -15,6 +15,7 @@ async function validateCSP() {
     const pagesWithoutCsp = new Set()
     
     const crawlResults = await sharedCrawlSite({
+        action: 'VALIDATE Content Security Policy',
         onRequestIntercept: _request => {
             // No special request handling needed for validation
         },
