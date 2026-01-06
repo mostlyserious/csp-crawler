@@ -13,6 +13,7 @@ async function validateCSP() {
     // Collect CSP violations
     const violations = []
     const pagesWithoutCsp = new Set()
+    let currentUrl = config.baseUrl
     
     const crawlResults = await sharedCrawlSite({
         action: 'VALIDATE Content Security Policy',
@@ -24,7 +25,7 @@ async function validateCSP() {
 
             if (text.includes('[Report Only]') || text.includes('Content Security Policy')) {
                 violations.push({
-                    url: msg.page()?.url() || 'unknown',
+                    url: currentUrl,
                     timestamp: new Date().toISOString(),
                     violation: text,
                     type: 'console',
@@ -33,6 +34,7 @@ async function validateCSP() {
             }
         },
         onPageVisit: async (page, url, _depth) => {
+            currentUrl = url
             // Check for CSP headers on the page
             try {
                 const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 })
