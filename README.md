@@ -37,6 +37,7 @@ npm run create -- --baseUrl https://example.com
 # other supported flags (CLI overrides .env):
 # --maxPages / --max-pages
 # --maxLinksPerPage / --max-links-per-page
+# --maxDepth / --max-depth
 # --headless
 # --outputFile / --output-file
 ```
@@ -50,6 +51,7 @@ Results are saved to a timestamped file in `reports/` by default.
 | `BASE_URL` | Yes* | — | Target site URL (can also be provided via `--baseUrl`) |
 | `MAX_PAGES` | No | `1000` | Max pages to crawl |
 | `MAX_LINKS_PER_PAGE` | No | `250` | Max number of same-origin links to enqueue per page (useful for sitemap/index pages) |
+| `MAX_DEPTH` | No | `10` | Max crawl depth (0 = only base page, 1 = base page + links from it, etc.) |
 | `OUTPUT_FILE` | No | Timestamped in `reports/` | Output file path (can also be provided via `--outputFile`) |
 | `HEADLESS` | No | `false` | Run browser headless |
 
