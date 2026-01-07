@@ -1,9 +1,9 @@
 import 'dotenv/config'
-import puppeteer from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
 import readline from 'readline'
 import { getCommonConfig, getScriptDirs } from './script-utils.js'
+import { crawlSite as sharedCrawlSite } from './crawler.js'
 
 const { templatesDir, reportsDir } = getScriptDirs(import.meta.url)
 const config = getCommonConfig({ reportPrefix: 'csp-policy', reportsDir })
@@ -71,13 +71,6 @@ async function createCSP() {
     console.log('🔍 Starting CSP creator...')
     console.log(`📍 Base URL: ${config.baseUrl}`)
     
-    const browser = await puppeteer.launch({ 
-        headless: config.headless,
-        devtools: false, 
-    })
-    
-    const page = await browser.newPage()
-    
     // Track external origins by directive
     const externalOrigins = {
         'script-src': new Set(),
@@ -96,87 +89,55 @@ async function createCSP() {
     let hasInlineScripts = false
     let hasInlineStyles = false
     
-    // Intercept network requests to categorize resources
-    await page.setRequestInterception(true)
-    
-    page.on('request', request => {
-        if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
+    const crawlResults = await sharedCrawlSite({
+        action: 'CREATE Content Security Policy',
+        onRequestIntercept: request => {
+            const url = request.url()
+            const resourceType = request.resourceType()
+            
             try {
-                if (new URL(request.url()).origin !== baseOrigin) {
-                    request.abort()
-
-                    return
+                const origin = new URL(url).origin
+                
+                if (origin !== baseOrigin && origin.startsWith('http')) {
+                    switch (resourceType) {
+                        case 'script':
+                            externalOrigins['script-src'].add(origin)
+                            break
+                        case 'stylesheet':
+                            externalOrigins['style-src'].add(origin)
+                            break
+                        case 'image':
+                            externalOrigins['img-src'].add(origin)
+                            break
+                        case 'font':
+                            externalOrigins['font-src'].add(origin)
+                            break
+                        case 'xhr':
+                        case 'fetch':
+                            externalOrigins['connect-src'].add(origin)
+                            break
+                        case 'sub_frame':
+                            externalOrigins['frame-src'].add(origin)
+                            break
+                        case 'media':
+                            externalOrigins['media-src'].add(origin)
+                            break
+                        case 'object':
+                            externalOrigins['object-src'].add(origin)
+                            break
+                        case 'worker':
+                            externalOrigins['worker-src'].add(origin)
+                            break
+                        case 'manifest':
+                            externalOrigins['manifest-src'].add(origin)
+                            break
+                    }
                 }
             } catch (_e) {
-                request.abort()
-
-                return
+                // Invalid URL, skip
             }
-        }
-
-        const url = request.url()
-        const resourceType = request.resourceType()
-        
-        try {
-            const origin = new URL(url).origin
-            
-            if (origin !== baseOrigin && origin.startsWith('http')) {
-                switch (resourceType) {
-                    case 'script':
-                        externalOrigins['script-src'].add(origin)
-                        break
-                    case 'stylesheet':
-                        externalOrigins['style-src'].add(origin)
-                        break
-                    case 'image':
-                        externalOrigins['img-src'].add(origin)
-                        break
-                    case 'font':
-                        externalOrigins['font-src'].add(origin)
-                        break
-                    case 'xhr':
-                    case 'fetch':
-                        externalOrigins['connect-src'].add(origin)
-                        break
-                    case 'sub_frame':
-                        externalOrigins['frame-src'].add(origin)
-                        break
-                    case 'media':
-                        externalOrigins['media-src'].add(origin)
-                        break
-                    case 'object':
-                        externalOrigins['object-src'].add(origin)
-                        break
-                    case 'worker':
-                        externalOrigins['worker-src'].add(origin)
-                        break
-                    case 'manifest':
-                        externalOrigins['manifest-src'].add(origin)
-                        break
-                }
-            }
-        } catch (_e) {
-            // Invalid URL, skip
-        }
-        
-        request.continue()
-    })
-    
-    // Collect all page URLs
-    const visited = new Set()
-    const toVisit = [ config.baseUrl ]
-    
-    while (toVisit.length > 0 && visited.size < config.maxPages) {
-        const currentUrl = toVisit.shift()
-        
-        if (visited.has(currentUrl)) {continue}
-        
-        try {
-            console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl}`)
-            
-            await page.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 })
-            visited.add(currentUrl)
-            
+        },
+        onPageVisit: async (page, _url, _depth) => {
             // Check for inline scripts and styles
             const inlineCheck = await page.evaluate(() => {
                 const scripts = Array.from(document.querySelectorAll('script:not([src])'))
@@ -193,52 +154,8 @@ async function createCSP() {
             if (inlineCheck.hasInlineScripts) {hasInlineScripts = true}
 
             if (inlineCheck.hasInlineStyles) {hasInlineStyles = true}
-            
-            // Extract links from current page
-            const links = await page.evaluate(({ baseOrigin, maxLinksPerPage }) => {
-                const anchors = Array.from(document.querySelectorAll('a[href]'))
-
-                return anchors
-                    .map(a => {
-                        try {
-                            const rawHref = a.getAttribute('href') || ''
-                            const url = new URL(rawHref, document.baseURI)
-
-                            if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
-
-                            url.hash = ''
-
-                            if (url.origin !== baseOrigin) {return null}
-
-                            return url.toString()
-                        } catch (_e) {
-                            return null
-                        }
-                    })
-                    .filter(Boolean)
-                    .filter(href => !href.toLowerCase().includes('.pdf'))
-                    .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
-                    .filter((href, index, arr) => arr.indexOf(href) === index)
-                    .slice(0, maxLinksPerPage)
-            }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
-            
-            // Add new links to visit queue
-            links.forEach(link => {
-                if (!visited.has(link) && !toVisit.includes(link)) {
-                    toVisit.push(link)
-                }
-            })
-            
-            console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`)
-            
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            
-        } catch (error) {
-            console.log(`❌ Error visiting ${currentUrl}: ${error.message} - possible redirect or network issue.`)
-        }
-    }
-    
-    await browser.close()
+        },
+    })
     
     // Build CSP policy
     const policy = {}
@@ -306,7 +223,7 @@ async function createCSP() {
     // Save results
     const results = {
         timestamp: new Date().toISOString(),
-        pagesScanned: visited.size,
+        pagesScanned: crawlResults.pagesScanned.length,
         hasInlineScripts,
         hasInlineStyles,
         includedTemplates,
@@ -317,7 +234,7 @@ async function createCSP() {
     fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
     
     console.log('\n🏁 CSP Creation Complete!')
-    console.log(`📊 Pages scanned: ${visited.size}`)
+    console.log(`📊 Pages scanned: ${crawlResults.pagesScanned.length}`)
     console.log(`📄 Results saved to: ${config.outputFile}`)
     
     if (hasInlineScripts) {

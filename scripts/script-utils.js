@@ -40,9 +40,13 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             'max-pages': { type: 'string' },
             maxLinksPerPage: { type: 'string' },
             'max-links-per-page': { type: 'string' },
+            maxDepth: { type: 'string' },
+            'max-depth': { type: 'string' },
             headless: { type: 'boolean' },
             outputFile: { type: 'string' },
             'output-file': { type: 'string' },
+            yes: { type: 'boolean' },
+            skipConfirmation: { type: 'boolean' },
         },
         strict: false,
         allowPositionals: true,
@@ -64,17 +68,26 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '250'
     const maxLinksPerPage = parseIntOrExit(maxLinksPerPageRaw, 'MAX_LINKS_PER_PAGE/--maxLinksPerPage')
 
+    const cliMaxDepth = values.maxDepth || values['max-depth']
+    const maxDepthRaw = cliMaxDepth || env.MAX_DEPTH || '10'
+    const maxDepth = parseIntOrExit(maxDepthRaw, 'MAX_DEPTH/--maxDepth')
+
     const cliHeadless = values.headless
     const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS === 'true'
 
     const cliOutputFile = values.outputFile || values['output-file']
     const outputFile = cliOutputFile || env.OUTPUT_FILE || getTimestampedFilename(reportsDir, reportPrefix)
 
+    const cliSkipConfirmation = values.yes || values.skipConfirmation
+    const skipConfirmation = typeof cliSkipConfirmation === 'boolean' ? cliSkipConfirmation : env.SKIP_CONFIRMATION === 'true'
+
     return {
         baseUrl,
         maxPages,
         maxLinksPerPage,
+        maxDepth,
         outputFile,
         headless,
+        skipConfirmation,
     }
 }
