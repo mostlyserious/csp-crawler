@@ -47,7 +47,7 @@ npm run validate -- --baseUrl https://example.com --quiet
 # --concurrency
 # --maxRetries / --max-retries
 # --delay
-# --headless
+# --headless / --no-headless
 # --quiet
 # --outputFile / --output-file
 # --yes / --skipConfirmation (skip confirmation prompt)
@@ -69,7 +69,7 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 | `MAX_RETRIES` | No | `2` | Max retries per page before marking as failed (3 total attempts) |
 | `DELAY` | No | `1000` | Delay between requests per worker in milliseconds |
 | `OUTPUT_FILE` | No | Timestamped in `reports/` | Output file path (can also be provided via `--outputFile`) |
-| `HEADLESS` | No | `true` | Run browser headless (set to `false` to show browser window) |
+| `HEADLESS` | No | `true` | Run browser headless (set to `false` or use `--no-headless` to show browser window) |
 | `QUIET` | No | `false` | Suppress per-page log output |
 | `SKIP_CONFIRMATION` | No | `false` | Skip confirmation prompt (for automated usage) |
 
@@ -80,13 +80,16 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 The `create` script can include predefined CSP sources for common third-party services. Templates are stored as JSON files in the `templates/` directory.
 
 ### Included Templates
+- **Cloudflare CDN**
+- **Craft CMS**
+- **Facebook / Meta Pixel**
+- **Google Ads**
 - **Google Analytics / Tag Manager**
 - **Google Fonts**
-- **YouTube Embeds**
-- **Vimeo Embeds**
-- **Cloudflare CDN**
-- **Facebook / Meta Pixel**
+- **Google reCAPTCHA**
 - **HubSpot**
+- **Vimeo Embeds**
+- **YouTube Embeds**
 
 ### Adding Custom Templates
 
@@ -101,6 +104,16 @@ Create a JSON file in `templates/` with this structure:
   }
 }
 ```
+
+## Planned Enhancements
+
+Concise test plan and TODOs for the next iteration (using `bun test`):
+
+- Add Bun unit tests for config parsing (env/CLI precedence, invalid values, negative/zero guardrails).
+- Add unit tests for URL normalization (tracking params removal, trailing slash handling, hash stripping).
+- Add template loading validation tests (malformed JSON, missing `directives`).
+- Add a mocked puppeteer harness to test crawl flow deterministically.
+- Add an opt-in integration test (`RUN_E2E=1`) that crawls a local fixture server.
 
 ## Considerations
 

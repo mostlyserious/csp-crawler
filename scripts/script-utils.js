@@ -43,6 +43,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             maxDepth: { type: 'string' },
             'max-depth': { type: 'string' },
             headless: { type: 'boolean' },
+            'no-headless': { type: 'boolean' },
             outputFile: { type: 'string' },
             'output-file': { type: 'string' },
             yes: { type: 'boolean' },
@@ -84,7 +85,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const maxDepthRaw = cliMaxDepth || env.MAX_DEPTH || '10'
     const maxDepth = parseIntOrExit(maxDepthRaw, 'MAX_DEPTH/--maxDepth')
 
-    const cliHeadless = values.headless
+    const cliHeadless = values['no-headless'] ? false : values.headless
     const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS !== 'false'
 
     const cliOutputFile = values.outputFile || values['output-file']
