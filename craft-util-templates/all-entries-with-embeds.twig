@@ -9,7 +9,7 @@
 {% set ownerIds = embedBlocks|column('ownerId')|unique %}
 {% set entriesWithEmbeds = craft.entries()
     .id(ownerIds)
-    .section(['not', 'moduleListing'])
+    .section(['not', 'moduleListing', 'cmsGuide'])
     .all() %}
 
 <html lang="en">

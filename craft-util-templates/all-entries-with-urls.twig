@@ -17,7 +17,7 @@
       {% set entries = craft.entries()
         .uri(':notempty:')
         .limit(null)
-        .section(['not', 'moduleListing'])
+        .section(['not', 'moduleListing', 'cmsGuide'])
         .orderBy('uri asc')
         .all() %}
 

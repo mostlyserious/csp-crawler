@@ -104,6 +104,8 @@ We often use this with Craft CMS. Add a `/utils` templates directory to list ent
 
 Remember to exclude sections like the Module Listing, CMS Guide, or others you wish to ignore.
 
+You may also need to add Categories, Tags, or other Custom Elements that are not Entries.
+
 ## Limitations
 
 - Logged-in or authenticated pages cannot be scanned; some manual testing is necessary.
