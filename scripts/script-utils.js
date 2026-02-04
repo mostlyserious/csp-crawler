@@ -50,6 +50,8 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             concurrency: { type: 'string' },
             maxRetries: { type: 'string' },
             'max-retries': { type: 'string' },
+            delay: { type: 'string' },
+            quiet: { type: 'boolean' },
         },
         strict: false,
         allowPositionals: true,
@@ -76,7 +78,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const maxDepth = parseIntOrExit(maxDepthRaw, 'MAX_DEPTH/--maxDepth')
 
     const cliHeadless = values.headless
-    const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS === 'true'
+    const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS !== 'false'
 
     const cliOutputFile = values.outputFile || values['output-file']
     const outputFile = cliOutputFile || env.OUTPUT_FILE || getTimestampedFilename(reportsDir, reportPrefix)
@@ -92,6 +94,13 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const maxRetriesRaw = cliMaxRetries || env.MAX_RETRIES || '2'
     const maxRetries = parseIntOrExit(maxRetriesRaw, 'MAX_RETRIES/--max-retries')
 
+    const cliDelay = values.delay
+    const delayRaw = cliDelay || env.DELAY || '1000'
+    const delay = parseIntOrExit(delayRaw, 'DELAY/--delay')
+
+    const cliQuiet = values.quiet
+    const quiet = typeof cliQuiet === 'boolean' ? cliQuiet : env.QUIET === 'true'
+
     return {
         baseUrl,
         maxPages,
@@ -102,5 +111,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         skipConfirmation,
         concurrency,
         maxRetries,
+        delay,
+        quiet,
     }
 }

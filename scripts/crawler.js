@@ -26,11 +26,39 @@ async function confirmCrawl(config, action) {
     console.log(`   Max Depth: ${config.maxDepth}`)
     console.log(`   Concurrency: ${config.concurrency}`)
     console.log(`   Max Retries: ${config.maxRetries}`)
+    console.log(`   Delay: ${config.delay}ms`)
     console.log(`   Headless: ${config.headless}`)
 
     const answer = await prompt('\nAre you ready to proceed? (y/n): ')
 
     return answer === 'y' || answer === 'yes'
+}
+
+const trackingParams = [ 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'fbclid', 'gclid' ]
+
+function normalizeUrl(urlString) {
+    try {
+        const url = new URL(urlString)
+
+        // Remove trailing slash (but not for root path)
+        if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+            url.pathname = url.pathname.slice(0, -1)
+        }
+
+        // Remove common tracking query params
+        for (const param of trackingParams) {
+            url.searchParams.delete(param)
+        }
+
+        // Sort remaining params for consistency
+        url.searchParams.sort()
+
+        url.hash = ''
+
+        return url.toString()
+    } catch {
+        return urlString
+    }
 }
 
 /**
@@ -43,6 +71,8 @@ async function confirmCrawl(config, action) {
  * @param {boolean} options.headless - Run browser headless
  * @param {number} options.concurrency - Number of concurrent worker pages
  * @param {number} options.maxRetries - Maximum retries per page
+ * @param {number} options.delay - Delay between requests per worker (ms)
+ * @param {boolean} options.quiet - Suppress verbose output
  * @param {Function} options.onPageVisit - Callback(page, url, depth, response) for each page visit
  * @param {Function} options.onRequestIntercept - Optional request interception callback; return truthy to skip default continue
  * @param {Function} options.onConsoleMessage - Optional console message callback(msg, pageUrl)
@@ -59,6 +89,7 @@ export async function crawlSite(options = {}) {
     })
 
     const baseOrigin = new URL(config.baseUrl).origin
+    const log = (...args) => { if (!config.quiet) {console.log(...args)} }
 
     // Confirmation prompt
     if (!options.skipConfirmation && !config.skipConfirmation) {
@@ -90,10 +121,12 @@ export async function crawlSite(options = {}) {
     }
 
     // Initialize crawl state
+    const normalizedBaseUrl = normalizeUrl(config.baseUrl)
     const visited = new Set()
     const failed = new Set()
-    const pending = new Set([ config.baseUrl ]) // O(1) lookup for queue membership
-    const toVisit = [ { url: config.baseUrl, depth: 0, retries: 0 } ]
+    const pending = new Set([ normalizedBaseUrl ]) // O(1) lookup for queue membership
+    const toVisit = [ { url: normalizedBaseUrl, depth: 0, retries: 0 } ]
+    let queueIndex = 0
     const crawlStats = {
         pagesScanned: 0,
         linksFound: 0,
@@ -102,6 +135,19 @@ export async function crawlSite(options = {}) {
         errors: [],
     }
     let activeWorkers = 0
+    let shuttingDown = false
+
+    // Graceful shutdown on SIGINT
+    const sigintHandler = () => {
+        if (shuttingDown) {
+            process.exit(1)
+        }
+
+        console.log('\n⚠️  Graceful shutdown requested. Finishing current pages...')
+        shuttingDown = true
+    }
+
+    process.on('SIGINT', sigintHandler)
 
     // Set up each worker page with its own listeners
     for (const workerPage of workerPages) {
@@ -145,11 +191,11 @@ export async function crawlSite(options = {}) {
     }
 
     // Worker function
-    async function processQueue(workerPage) {
+    async function processQueue(workerPage, workerId) {
         while (true) {
-            if (visited.size >= config.maxPages) {return}
+            if (shuttingDown || visited.size >= config.maxPages) {return}
 
-            if (toVisit.length === 0) {
+            if (queueIndex >= toVisit.length) {
                 if (activeWorkers === 0) {return}
 
                 await new Promise(resolve => setTimeout(resolve, 100))
@@ -157,7 +203,7 @@ export async function crawlSite(options = {}) {
                 continue
             }
 
-            const current = toVisit.shift()
+            const current = toVisit[queueIndex++]
             const currentUrl = current.url
             const currentDepth = current.depth
             const retries = current.retries || 0
@@ -169,7 +215,7 @@ export async function crawlSite(options = {}) {
             if (failed.has(currentUrl)) {continue}
 
             if (currentDepth > config.maxDepth) {
-                console.log(`🔚 Skipping ${currentUrl} - max depth (${config.maxDepth}) reached`)
+                log(`🔚 [W${workerId}] Skipping ${currentUrl} - max depth (${config.maxDepth}) reached`)
 
                 continue
             }
@@ -180,9 +226,9 @@ export async function crawlSite(options = {}) {
             workerPage._setCurrentUrl(currentUrl)
 
             try {
-                console.log(`📄 [${visited.size + 1}] Visiting: ${currentUrl} (depth: ${currentDepth})`)
+                log(`📄 [W${workerId}] [${visited.size + 1}] Visiting: ${currentUrl} (depth: ${currentDepth})`)
 
-                const response = await workerPage.goto(currentUrl, { waitUntil: 'networkidle0', timeout: 30000 })
+                const response = await workerPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
 
                 visited.add(currentUrl)
                 crawlStats.pagesScanned++
@@ -217,12 +263,13 @@ export async function crawlSite(options = {}) {
                         .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
                         .filter(href => !href.includes('tel:'))
                         .filter(href => !href.includes('mailto:'))
-                        .filter((href, index, arr) => arr.indexOf(href) === index)
+
+                    const uniqueLinks = [ ...new Set(allLinks) ]
 
                     return {
-                        links: allLinks.slice(0, maxLinksPerPage),
-                        totalFound: allLinks.length,
-                        wasTruncated: allLinks.length > maxLinksPerPage,
+                        links: uniqueLinks.slice(0, maxLinksPerPage),
+                        totalFound: uniqueLinks.length,
+                        wasTruncated: uniqueLinks.length > maxLinksPerPage,
                     }
                 }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
 
@@ -231,14 +278,16 @@ export async function crawlSite(options = {}) {
                 if (wasTruncated) {
                     const truncatedCount = totalFound - links.length
 
-                    console.log(`   ⚠️  WARNING: Page has ${totalFound} links, only extracting ${links.length} (truncated ${truncatedCount})`)
+                    log(`   ⚠️  [W${workerId}] WARNING: Page has ${totalFound} links, only extracting ${links.length} (truncated ${truncatedCount})`)
                     crawlStats.linksTruncated += truncatedCount
                 }
 
-                // Add new links to visit queue
+                // Add new links to visit queue (normalize before checking)
                 const newLinks = []
 
-                links.forEach(link => {
+                links.forEach(rawLink => {
+                    const link = normalizeUrl(rawLink)
+
                     if (!visited.has(link) && !failed.has(link) && !pending.has(link)) {
                         toVisit.push({ url: link, depth: currentDepth + 1, retries: 0 })
                         pending.add(link)
@@ -249,18 +298,16 @@ export async function crawlSite(options = {}) {
                 crawlStats.linksFound += links.length
                 crawlStats.newLinksFound += newLinks.length
 
-                console.log(`   📄 Found ${links.length} total links, ${newLinks.length} new links to visit`)
-                console.log(`   📊 Queue: ${toVisit.length} pages to visit, ${visited.size} visited`)
+                log(`   📄 [W${workerId}] Found ${links.length} total links, ${newLinks.length} new links to visit`)
+                log(`   📊 [W${workerId}] Queue: ${toVisit.length - queueIndex} pages to visit, ${visited.size} visited`)
             } catch (error) {
                 if (retries < config.maxRetries) {
                     toVisit.push({ url: currentUrl, depth: currentDepth, retries: retries + 1 })
                     pending.add(currentUrl)
-                    console.log(`🔄 Retry ${retries + 1}/${config.maxRetries} queued for ${currentUrl}`)
+                    console.log(`🔄 [W${workerId}] Retry ${retries + 1}/${config.maxRetries} queued for ${currentUrl}`)
                 } else {
                     failed.add(currentUrl)
-                    const errorMsg = `❌ Error visiting ${currentUrl}: ${error.message} - possible redirect or network issue.`
-
-                    console.log(errorMsg)
+                    console.log(`❌ [W${workerId}] Error visiting ${currentUrl}: ${error.message} - possible redirect or network issue.`)
                     crawlStats.errors.push({ url: currentUrl, error: error.message })
                 }
             } finally {
@@ -268,17 +315,20 @@ export async function crawlSite(options = {}) {
             }
 
             // Wait between requests
-            await new Promise(resolve => setTimeout(resolve, 1000))
+            if (config.delay > 0) {
+                await new Promise(resolve => setTimeout(resolve, config.delay))
+            }
         }
     }
 
     // Run all workers concurrently
-    await Promise.all(workerPages.map(p => processQueue(p)))
+    await Promise.all(workerPages.map((p, i) => processQueue(p, i + 1)))
 
+    process.removeListener('SIGINT', sigintHandler)
     await browser.close()
 
     // Warn if crawl stopped due to maxPages limit
-    const abandonedUrls = toVisit.map(item => item.url)
+    const abandonedUrls = toVisit.slice(queueIndex).map(item => item.url)
 
     if (abandonedUrls.length > 0) {
         console.log('')
@@ -304,8 +354,13 @@ export async function crawlSite(options = {}) {
         console.log(`URLs abandoned (not visited): ${abandonedUrls.length}`)
     }
 
+    if (shuttingDown) {
+        console.log('⚠️  Crawl was interrupted by user. Results are partial.')
+    }
+
     return {
         timestamp: new Date().toISOString(),
+        partial: shuttingDown,
         pagesScanned: Array.from(visited),
         pagesFailed: Array.from(failed),
         pagesAbandoned: abandonedUrls,
@@ -317,6 +372,7 @@ export async function crawlSite(options = {}) {
             maxLinksPerPage: config.maxLinksPerPage,
             concurrency: config.concurrency,
             maxRetries: config.maxRetries,
+            delay: config.delay,
         },
     }
 }
