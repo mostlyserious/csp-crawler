@@ -4,7 +4,6 @@ import { getCommonConfig } from './script-utils.js'
 import { crawlSite as sharedCrawlSite } from './crawler.js'
 
 const config = getCommonConfig({ reportPrefix: 'csp-violations', reportsDir: './reports' })
-const _baseOrigin = new URL(config.baseUrl).origin
 
 async function validateCSP() {
     console.log('🔍 Starting CSP crawler...')
@@ -13,19 +12,15 @@ async function validateCSP() {
     // Collect CSP violations
     const violations = []
     const pagesWithoutCsp = new Set()
-    let currentUrl = config.baseUrl
-    
+
     const crawlResults = await sharedCrawlSite({
         action: 'VALIDATE Content Security Policy',
-        onRequestIntercept: _request => {
-            // No special request handling needed for validation
-        },
-        onConsoleMessage: msg => {
+        onConsoleMessage: (msg, pageUrl) => {
             const text = msg.text()
 
             if (text.includes('[Report Only]') || text.includes('Content Security Policy')) {
                 violations.push({
-                    url: currentUrl,
+                    url: pageUrl,
                     timestamp: new Date().toISOString(),
                     violation: text,
                     type: 'console',
@@ -33,24 +28,16 @@ async function validateCSP() {
                 console.log(`🚫 CSP Violation found: ${text}`)
             }
         },
-        onPageVisit: async (page, url, _depth) => {
-            currentUrl = url
-            // Check for CSP headers on the page
-            try {
-                const response = await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 })
+        onPageVisit: async (_page, url, _depth, response) => {
+            if (response) {
+                const headers = response.headers()
+                const cspHeader = headers['content-security-policy']
+                const cspReportOnly = headers['content-security-policy-report-only']
 
-                if (response) {
-                    const headers = response.headers()
-                    const cspHeader = headers['content-security-policy']
-                    const cspReportOnly = headers['content-security-policy-report-only']
-                    
-                    if (!cspHeader && !cspReportOnly && !pagesWithoutCsp.has(url)) {
-                        pagesWithoutCsp.add(url)
-                        console.log(`⚠️  No CSP header on document: ${url}`)
-                    }
+                if (!cspHeader && !cspReportOnly && !pagesWithoutCsp.has(url)) {
+                    pagesWithoutCsp.add(url)
+                    console.log(`⚠️  No CSP header on document: ${url}`)
                 }
-            } catch (error) {
-                console.log(`❌ Error checking CSP headers for ${url}: ${error.message}`)
             }
         },
     })

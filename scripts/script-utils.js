@@ -47,6 +47,9 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             'output-file': { type: 'string' },
             yes: { type: 'boolean' },
             skipConfirmation: { type: 'boolean' },
+            concurrency: { type: 'string' },
+            maxRetries: { type: 'string' },
+            'max-retries': { type: 'string' },
         },
         strict: false,
         allowPositionals: true,
@@ -61,11 +64,11 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     }
 
     const cliMaxPages = values.maxPages || values['max-pages']
-    const maxPagesRaw = cliMaxPages || env.MAX_PAGES || '1000'
+    const maxPagesRaw = cliMaxPages || env.MAX_PAGES || '50000'
     const maxPages = parseIntOrExit(maxPagesRaw, 'MAX_PAGES/--maxPages')
 
     const cliMaxLinksPerPage = values.maxLinksPerPage || values['max-links-per-page']
-    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '250'
+    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '1000'
     const maxLinksPerPage = parseIntOrExit(maxLinksPerPageRaw, 'MAX_LINKS_PER_PAGE/--maxLinksPerPage')
 
     const cliMaxDepth = values.maxDepth || values['max-depth']
@@ -81,6 +84,14 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const cliSkipConfirmation = values.yes || values.skipConfirmation
     const skipConfirmation = typeof cliSkipConfirmation === 'boolean' ? cliSkipConfirmation : env.SKIP_CONFIRMATION === 'true'
 
+    const cliConcurrency = values.concurrency
+    const concurrencyRaw = cliConcurrency || env.CONCURRENCY || '5'
+    const concurrency = parseIntOrExit(concurrencyRaw, 'CONCURRENCY/--concurrency')
+
+    const cliMaxRetries = values.maxRetries || values['max-retries']
+    const maxRetriesRaw = cliMaxRetries || env.MAX_RETRIES || '2'
+    const maxRetries = parseIntOrExit(maxRetriesRaw, 'MAX_RETRIES/--max-retries')
+
     return {
         baseUrl,
         maxPages,
@@ -89,5 +100,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         outputFile,
         headless,
         skipConfirmation,
+        concurrency,
+        maxRetries,
     }
 }
