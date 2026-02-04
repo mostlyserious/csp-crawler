@@ -65,6 +65,13 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         process.exit(1)
     }
 
+    try {
+        new URL(baseUrl)
+    } catch {
+        console.error(`❌ Invalid URL: ${baseUrl}`)
+        process.exit(1)
+    }
+
     const cliMaxPages = values.maxPages || values['max-pages']
     const maxPagesRaw = cliMaxPages || env.MAX_PAGES || '50000'
     const maxPages = parseIntOrExit(maxPagesRaw, 'MAX_PAGES/--maxPages')
