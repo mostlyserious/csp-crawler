@@ -224,6 +224,7 @@ async function createCSP() {
     const results = {
         timestamp: new Date().toISOString(),
         pagesScanned: crawlResults.pagesScanned.length,
+        pagesRedirectedExternal: crawlResults.pagesRedirectedExternal,
         hasInlineScripts,
         hasInlineStyles,
         includedTemplates,

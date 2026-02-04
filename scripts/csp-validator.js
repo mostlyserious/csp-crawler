@@ -8,7 +8,7 @@ const config = getCommonConfig({ reportPrefix: 'csp-violations', reportsDir: './
 async function validateCSP() {
     console.log('🔍 Starting CSP crawler...')
     console.log(`📍 Base URL: ${config.baseUrl}`)
-    
+
     // Collect CSP violations
     const violations = []
     const pagesWithoutCsp = new Set()
@@ -41,25 +41,27 @@ async function validateCSP() {
             }
         },
     })
-    
+
     // Save results
     const results = {
         timestamp: new Date().toISOString(),
         pagesScanned: crawlResults.pagesScanned,
+        pagesRedirectedExternal: crawlResults.pagesRedirectedExternal,
         pagesWithoutCsp: Array.from(pagesWithoutCsp),
         totalViolations: violations.length,
         violations: violations,
         crawlStats: crawlResults.crawlStats,
     }
-    
+
     fs.writeFileSync(config.outputFile, JSON.stringify(results, null, 2))
-    
+
     console.log('Crawl Complete!')
     console.log(`Pages scanned: ${crawlResults.pagesScanned.length}`)
+    console.log(`External redirects skipped: ${crawlResults.pagesRedirectedExternal?.length ?? 0}`)
     console.log(`CSP violations found: ${violations.length}`)
     console.log(`Pages without CSP header: ${pagesWithoutCsp.size}`)
     console.log(`Results saved to: ${config.outputFile}`)
-    
+
     if (violations.length > 0) {
         console.log('\n🔍 Unique violation types:')
         const uniqueViolations = [ ...new Set(violations.map(v => v.violation)) ]
@@ -72,6 +74,5 @@ async function validateCSP() {
 try {
     validateCSP().catch(console.error)
 } catch (_error) {
-    console.log('❌ Puppeteer not installed. Install with:')
-    console.log('   npm install puppeteer')
+    console.log('❌ Puppeteer not installed.')
 }

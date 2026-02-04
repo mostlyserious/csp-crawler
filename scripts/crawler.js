@@ -122,8 +122,10 @@ export async function crawlSite(options = {}) {
         linksFound: 0,
         newLinksFound: 0,
         linksTruncated: 0,
+        redirectsExternal: 0,
         errors: [],
     }
+    const redirectedExternal = new Map()
     let activeWorkers = 0
     let shuttingDown = false
 
@@ -160,6 +162,23 @@ export async function crawlSite(options = {}) {
                 if (request.frame() === workerPage.mainFrame() && request.resourceType() === 'document') {
                     try {
                         if (new URL(request.url()).origin !== baseOrigin) {
+                            const redirectChain = request.redirectChain()
+
+                            if (redirectChain.length > 0) {
+                                const fromUrl = normalizeUrl(redirectChain[redirectChain.length - 1].url())
+                                const toUrl = normalizeUrl(request.url())
+
+                                if (!redirectedExternal.has(fromUrl)) {
+                                    redirectedExternal.set(fromUrl, {
+                                        from: fromUrl,
+                                        to: toUrl,
+                                        chain: [ ...redirectChain.map(r => r.url()), request.url() ],
+                                        reason: 'redirected-to-external-origin',
+                                    })
+                                    crawlStats.redirectsExternal++
+                                }
+                            }
+
                             request.abort()
 
                             return
@@ -231,6 +250,31 @@ export async function crawlSite(options = {}) {
                     log(`📄 [W${workerId}] [${visited.size + 1}] Visiting: ${currentUrl} (depth: ${currentDepth})`)
 
                     const response = await workerPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                    const finalUrl = response?.url() || workerPage.url()
+
+                    try {
+                        const finalOrigin = new URL(finalUrl).origin
+
+                        if (finalOrigin !== baseOrigin) {
+                            if (!redirectedExternal.has(currentUrl)) {
+                                const redirectChain = response?.request()?.redirectChain?.() || []
+
+                                redirectedExternal.set(currentUrl, {
+                                    from: currentUrl,
+                                    to: finalUrl,
+                                    chain: [ ...redirectChain.map(r => r.url()), finalUrl ],
+                                    reason: 'redirected-to-external-origin',
+                                })
+                                crawlStats.redirectsExternal++
+                            }
+
+                            visited.add(currentUrl)
+                            log(`↪️  [W${workerId}] Skipping ${currentUrl} - redirected to external origin (${finalUrl})`)
+                            continue
+                        }
+                    } catch (_e) {
+                        // If finalUrl is invalid, proceed with the crawl as normal.
+                    }
 
                     visited.add(currentUrl)
                     crawlStats.pagesScanned++
@@ -303,6 +347,12 @@ export async function crawlSite(options = {}) {
                     log(`   📄 [W${workerId}] Found ${links.length} total links, ${newLinks.length} new links to visit`)
                     log(`   📊 [W${workerId}] Queue: ${toVisit.length - queueIndex} pages to visit, ${visited.size} visited`)
                 } catch (error) {
+                    if (redirectedExternal.has(currentUrl)) {
+                        visited.add(currentUrl)
+                        log(`↪️  [W${workerId}] Skipping ${currentUrl} - redirected to external origin`)
+                        continue
+                    }
+
                     if (retries < config.maxRetries) {
                         toVisit.push({ url: currentUrl, depth: currentDepth, retries: retries + 1 })
                         pending.add(currentUrl)
@@ -352,6 +402,7 @@ export async function crawlSite(options = {}) {
     console.log(`Pages scanned: ${visited.size}`)
     console.log(`Total links found: ${crawlStats.linksFound}`)
     console.log(`New links discovered: ${crawlStats.newLinksFound}`)
+    console.log(`External redirects skipped: ${crawlStats.redirectsExternal}`)
     console.log(`Errors encountered: ${crawlStats.errors.length}`)
 
     if (abandonedUrls.length > 0) {
@@ -368,6 +419,7 @@ export async function crawlSite(options = {}) {
         pagesScanned: Array.from(visited),
         pagesFailed: Array.from(failed),
         pagesAbandoned: abandonedUrls,
+        pagesRedirectedExternal: Array.from(redirectedExternal.values()),
         crawlStats,
         config: {
             baseUrl: config.baseUrl,
