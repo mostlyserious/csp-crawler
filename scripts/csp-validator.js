@@ -28,7 +28,7 @@ async function validateCSP() {
                 console.log(`🚫 CSP Violation found: ${text}`)
             }
         },
-        onPageVisit: async (_page, url, _depth, response) => {
+        onPageVisit: (_page, url, _depth, response) => {
             if (response) {
                 const headers = response.headers()
                 const cspHeader = headers['content-security-policy']
