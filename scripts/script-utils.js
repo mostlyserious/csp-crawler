@@ -43,10 +43,16 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             maxDepth: { type: 'string' },
             'max-depth': { type: 'string' },
             headless: { type: 'boolean' },
+            'no-headless': { type: 'boolean' },
             outputFile: { type: 'string' },
             'output-file': { type: 'string' },
             yes: { type: 'boolean' },
             skipConfirmation: { type: 'boolean' },
+            concurrency: { type: 'string' },
+            maxRetries: { type: 'string' },
+            'max-retries': { type: 'string' },
+            delay: { type: 'string' },
+            quiet: { type: 'boolean' },
         },
         strict: false,
         allowPositionals: true,
@@ -60,26 +66,48 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         process.exit(1)
     }
 
+    try {
+        new URL(baseUrl)
+    } catch {
+        console.error(`❌ Invalid URL: ${baseUrl}`)
+        process.exit(1)
+    }
+
     const cliMaxPages = values.maxPages || values['max-pages']
-    const maxPagesRaw = cliMaxPages || env.MAX_PAGES || '1000'
+    const maxPagesRaw = cliMaxPages || env.MAX_PAGES || '50000'
     const maxPages = parseIntOrExit(maxPagesRaw, 'MAX_PAGES/--maxPages')
 
     const cliMaxLinksPerPage = values.maxLinksPerPage || values['max-links-per-page']
-    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '250'
+    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '50000'
     const maxLinksPerPage = parseIntOrExit(maxLinksPerPageRaw, 'MAX_LINKS_PER_PAGE/--maxLinksPerPage')
 
     const cliMaxDepth = values.maxDepth || values['max-depth']
     const maxDepthRaw = cliMaxDepth || env.MAX_DEPTH || '10'
     const maxDepth = parseIntOrExit(maxDepthRaw, 'MAX_DEPTH/--maxDepth')
 
-    const cliHeadless = values.headless
-    const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS === 'true'
+    const cliHeadless = values['no-headless'] ? false : values.headless
+    const headless = typeof cliHeadless === 'boolean' ? cliHeadless : env.HEADLESS !== 'false'
 
     const cliOutputFile = values.outputFile || values['output-file']
     const outputFile = cliOutputFile || env.OUTPUT_FILE || getTimestampedFilename(reportsDir, reportPrefix)
 
     const cliSkipConfirmation = values.yes || values.skipConfirmation
     const skipConfirmation = typeof cliSkipConfirmation === 'boolean' ? cliSkipConfirmation : env.SKIP_CONFIRMATION === 'true'
+
+    const cliConcurrency = values.concurrency
+    const concurrencyRaw = cliConcurrency || env.CONCURRENCY || '5'
+    const concurrency = parseIntOrExit(concurrencyRaw, 'CONCURRENCY/--concurrency')
+
+    const cliMaxRetries = values.maxRetries || values['max-retries']
+    const maxRetriesRaw = cliMaxRetries || env.MAX_RETRIES || '2'
+    const maxRetries = parseIntOrExit(maxRetriesRaw, 'MAX_RETRIES/--max-retries')
+
+    const cliDelay = values.delay
+    const delayRaw = cliDelay || env.DELAY || '1000'
+    const delay = parseIntOrExit(delayRaw, 'DELAY/--delay')
+
+    const cliQuiet = values.quiet
+    const quiet = typeof cliQuiet === 'boolean' ? cliQuiet : env.QUIET === 'true'
 
     return {
         baseUrl,
@@ -89,5 +117,9 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         outputFile,
         headless,
         skipConfirmation,
+        concurrency,
+        maxRetries,
+        delay,
+        quiet,
     }
 }

@@ -1,0 +1,37 @@
+<!doctype html>
+
+{# Minimal HTML test page: no styling, and explicitly block robots/indexing #}
+{% do craft.app.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet') %}
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>All URLs Test</title>
+  </head>
+  <body>
+    <main>
+      <h1>All Entries With a URL</h1>
+
+      {% set entries = craft.entries()
+        .uri(':notempty:')
+        .limit(null)
+        .section(['not', 'moduleListing'])
+        .orderBy('uri asc')
+        .all() %}
+
+      {% if entries|length %}
+        <ul>
+          {% for entry in entries %}
+            <li>
+              <a href="{{ entry.url }}">{{ entry.title }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No entries with URLs found.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

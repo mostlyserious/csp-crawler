@@ -1,11 +1,11 @@
 {
   "type": "module",
   "scripts": {
-    "check": "node scripts/csp-validator.js",
-    "clear-reports": "node scripts/clear-reports.js",
-    "create": "node scripts/csp-create.js",
+    "check": "bun scripts/csp-validator.js",
+    "clear-reports": "bun scripts/clear-reports.js",
+    "create": "bun scripts/csp-create.js",
     "lint": "eslint . --fix",
-    "validate": "node scripts/csp-validator.js"
+    "validate": "bun scripts/csp-validator.js"
   },
   "devDependencies": {
     "@eslint/json": "^0.14.0",

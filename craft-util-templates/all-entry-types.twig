@@ -1,0 +1,95 @@
+<!doctype html>
+
+{# Minimal HTML test page: no styling, and explicitly block robots/indexing #}
+{% do craft.app.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet') %}
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>Entry Types Test</title>
+  </head>
+  <body>
+    <main>
+      <h1>Entry Types Test</h1>
+
+      {# Get all sections #}
+      {% set sections = craft.app.entries.allSections|filter(s => s.handle != 'moduleListing') %}
+
+      <ul>
+        {# Loop over each section #}
+        {% for section in sections %}
+          <li>
+            <strong>Section:</strong> {{ section.name }}
+
+            <ul>
+              {# Get all entry types in this section #}
+              {% set entryTypes = section.getEntryTypes() %}
+
+              {# Loop over each entry type #}
+              {% for entryType in entryTypes %}
+                <li>
+                  <strong>Entry Type:</strong> {{ entryType.name }}
+
+                  <ul>
+                    {# Get an example entry of this entry type (any status; link if it has a URL) #}
+                    {% set entries = craft.entries()
+                      .sectionId(section.id)
+                      .typeId(entryType.id)
+                      .site('*')
+                      .limit(1)
+                      .all() %}
+
+                    {% if entries|length %}
+                      {% for entry in entries %}
+                        <li>
+                          {% if entry.url %}
+                            <a href="{{ entry.url }}">{{ entry.title }}</a>
+                          {% else %}
+                            {{ entry.title }} <small>(no URL)</small>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    {% else %}
+                      <li><em>No entries found for this entry type.</em></li>
+                    {% endif %}
+                  </ul>
+                </li>
+              {% endfor %}
+            </ul>
+          </li>
+        {% endfor %}
+      </ul>
+
+      {# Calendar plugin example event (Solspace Calendar) #}
+      {% if craft.app.plugins.isPluginInstalled('calendar') and craft.app.plugins.isPluginEnabled('calendar') and craft.calendar is defined %}
+        {% set events = craft.calendar.events()
+          .limit(1)
+          .all() %}
+
+        <ul>
+          <li>
+            <strong>Calendar Events</strong>
+
+            <ul>
+              {% if events|length %}
+                {% for event in events %}
+                  <li>
+                    {% if event.url %}
+                      <a href="{{ event.url }}">{{ event.title }}</a>
+                    {% else %}
+                      {{ event.title }} <small>(no URL)</small>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              {% else %}
+                <li><em>No events found.</em></li>
+              {% endif %}
+            </ul>
+          </li>
+        </ul>
+      {% endif %}
+    </main>
+  </body>
+</html>

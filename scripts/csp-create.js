@@ -137,7 +137,7 @@ async function createCSP() {
                 // Invalid URL, skip
             }
         },
-        onPageVisit: async (page, _url, _depth) => {
+        onPageVisit: async (page, _url, _depth, _response) => {
             // Check for inline scripts and styles
             const inlineCheck = await page.evaluate(() => {
                 const scripts = Array.from(document.querySelectorAll('script:not([src])'))
