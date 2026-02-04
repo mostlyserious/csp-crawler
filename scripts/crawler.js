@@ -89,7 +89,7 @@ export async function crawlSite(options = {}) {
     })
 
     const baseOrigin = new URL(config.baseUrl).origin
-    const log = (...args) => { if (!config.quiet) {console.log(...args)} }
+    const log = (...args) => { if (!config.quiet) { console.log(...args) } }
 
     // Confirmation prompt
     if (!options.skipConfirmation && !config.skipConfirmation) {
@@ -185,7 +185,7 @@ export async function crawlSite(options = {}) {
                 if (options.onRequestIntercept) {
                     const handled = options.onRequestIntercept(request)
 
-                    if (handled) {return}
+                    if (handled) { return }
                 }
 
                 request.continue()
@@ -216,11 +216,12 @@ export async function crawlSite(options = {}) {
         // Worker function
         async function processQueue(workerPage, workerId) {
             let activePage = workerPage
+
             while (true) {
-                if (shuttingDown || visited.size >= config.maxPages) {return}
+                if (shuttingDown || visited.size >= config.maxPages) { return }
 
                 if (queueIndex >= toVisit.length) {
-                    if (activeWorkers === 0) {return}
+                    if (activeWorkers === 0) { return }
 
                     await new Promise(resolve => setTimeout(resolve, 100))
 
@@ -234,9 +235,9 @@ export async function crawlSite(options = {}) {
 
                 pending.delete(currentUrl)
 
-                if (visited.has(currentUrl)) {continue}
+                if (visited.has(currentUrl)) { continue }
 
-                if (failed.has(currentUrl)) {continue}
+                if (failed.has(currentUrl)) { continue }
 
                 if (currentDepth > config.maxDepth) {
                     log(`🔚 [W${workerId}] Skipping ${currentUrl} - max depth (${config.maxDepth}) reached`)
@@ -244,7 +245,7 @@ export async function crawlSite(options = {}) {
                     continue
                 }
 
-                if (visited.size >= config.maxPages) {return}
+                if (visited.size >= config.maxPages) { return }
 
                 activeWorkers++
                 activePage._setCurrentUrl(currentUrl)
@@ -297,10 +298,10 @@ export async function crawlSite(options = {}) {
                                     const rawHref = a.getAttribute('href') || ''
                                     const url = new URL(rawHref, document.baseURI)
 
-                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
+                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') { return null }
 
                                     url.hash = ''
-                                    if (url.origin !== baseOrigin) {return null}
+                                    if (url.origin !== baseOrigin) { return null }
 
                                     return url.toString()
                                 } catch (_e) {
@@ -334,15 +335,17 @@ export async function crawlSite(options = {}) {
                     // Add new links to visit queue (normalize before checking)
                     const newLinks = []
 
-                    links.forEach(rawLink => {
-                        const link = normalizeUrl(rawLink)
+                    if (currentDepth < config.maxDepth) {
+                        links.forEach(rawLink => {
+                            const link = normalizeUrl(rawLink)
 
-                        if (!visited.has(link) && !failed.has(link) && !pending.has(link)) {
-                            toVisit.push({ url: link, depth: currentDepth + 1, retries: 0 })
-                            pending.add(link)
-                            newLinks.push(link)
-                        }
-                    })
+                            if (!visited.has(link) && !failed.has(link) && !pending.has(link)) {
+                                toVisit.push({ url: link, depth: currentDepth + 1, retries: 0 })
+                                pending.add(link)
+                                newLinks.push(link)
+                            }
+                        })
+                    }
 
                     crawlStats.linksFound += links.length
                     crawlStats.newLinksFound += newLinks.length
