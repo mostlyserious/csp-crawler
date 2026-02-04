@@ -1,46 +1,37 @@
 # CSP Crawler
 
-Crawls a website and collects Content Security Policy violations.
+Crawls a website to create or validate its Content Security Policy.
 
 ## Requirements
 
-Bun (latest) or Node.js `>= 18`.
+Bun (latest)
 
-## Setup
+## Setup and Usage
 
 ```bash
-npm install
+bun install
 cp .env.example .env
-# or with bun:
-# bun install
+bun run validate
 ```
 
-Edit `.env` with your target URL.
-
-You can also provide the target URL via CLI with `--baseUrl`, which overrides `.env`.
-
-## Usage
+Configuration with `.env` is recommended. Edit it with your target URL. And that may be the only configuration you need.
 
 ```bash
-npm run validate
-# or with bun:
-# bun run validate
+# Typical usage:
+bun run validate
 
-# override BASE_URL from .env:
-npm run validate -- --baseUrl https://example.com
-# or with bun:
-# bun run validate -- --baseUrl https://example.com
+# Optional CLI overrides:
 
-# create a CSP policy report (also supports --baseUrl):
-npm run create -- --baseUrl https://example.com
+## override BASE_URL from .env:
+bun run validate -- --baseUrl https://example.com
 
-# crawl with 3 concurrent tabs and limit to 100 pages:
-npm run validate -- --baseUrl https://example.com --concurrency 3 --max-pages 100
+## crawl with 3 concurrent tabs and limit to 100 pages:
+bun run validate -- --baseUrl https://example.com --concurrency 3 --max-pages 100
 
-# quiet mode (suppress per-page output):
-npm run validate -- --baseUrl https://example.com --quiet
+## quiet mode (suppress per-page output):
+bun run validate -- --baseUrl https://example.com --quiet
 
-# other supported flags (CLI overrides .env):
+## other supported flags (CLI overrides .env):
 # --maxPages / --max-pages
 # --maxLinksPerPage / --max-links-per-page
 # --maxDepth / --max-depth
@@ -53,11 +44,9 @@ npm run validate -- --baseUrl https://example.com --quiet
 # --yes / --skipConfirmation (skip confirmation prompt)
 ```
 
-Results are saved to a timestamped file in `reports/` by default.
-
 Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pages and saves partial results). Press `Ctrl+C` again to force exit.
 
-## Environment Variables
+## Configuration with Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -75,17 +64,9 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 
 *`BASE_URL` is required unless you pass `--baseUrl`.
 
-## Templates
+## CSP Templates from Common Third-Party Services
 
 The `create` script can include predefined CSP sources for common third-party services. Templates are stored as JSON files in the `templates/` directory.
-
-### Craft CMS Notes
-
-We frequently use this crawler with Craft CMS. It helps to add a `/utils` directory under your Craft templates to build comprehensive lists of entries (e.g., all URLs or entries matching specific criteria) for crawling and CSP review. Example Twig utilities are available in `craft-util-templates/` and may need to be modified to suit your Craft install:
-
-- `craft-util-templates/all-entries-with-urls.twig`
-- `craft-util-templates/all-entries-with-embeds.twig`
-- `craft-util-templates/all-entry-types.twig`
 
 ### Included Templates
 - **Cloudflare CDN**
@@ -113,6 +94,25 @@ Create a JSON file in `templates/` with this structure:
 }
 ```
 
+## Usage with Craft CMS
+
+We often use this with Craft CMS. Add a `/utils` templates directory to list entries/URLs for crawling. Example Twig utilities live in `craft-util-templates/` and may need tweaks for your install:
+
+- [All Entries with a URI](`craft-util-templates/all-entries-with-urls.twig`)
+- [All Entries with an Embed Matrix Block](`craft-util-templates/all-entries-with-embeds.twig`)
+- [All Entry Types including Craft Calendar Plugin Events](`craft-util-templates/all-entry-types.twig`)
+
+## Limitations
+
+- Logged-in or authenticated pages cannot be scanned; some manual testing is necessary.
+- Resources that load only after user interactions (e.g., clicking a video) must be discovered manually.
+
+## Other Considerations
+
+The CSP typically applies to both the frontend and backend. Since the backend cannot be scanned by this script, you may need to manually check the backend for CSP violations.
+
+Iframe CSP errors can appear in the console and be reported, but they do not require action. We may explore excluding those in the future.
+
 ## Planned Enhancements
 
 Concise test plan and TODOs for the next iteration (using `bun test`):
@@ -123,14 +123,3 @@ Concise test plan and TODOs for the next iteration (using `bun test`):
 - Add a mocked puppeteer harness to test crawl flow deterministically.
 - Add an opt-in integration test (`RUN_E2E=1`) that crawls a local fixture server.
 - Add support for `sitemap.xml` discovery, including sitemap indexes that link to other sitemaps.
-
-## Considerations
-
-The CSP typically applies to both the frontend and backend. Since the backend cannot be scanned by this script, you may need to manually check the backend for CSP violations.
-
-Iframe CSP errors can appear in the console and be reported, but they do not require action. We may explore excluding those in the future.
-
-## Limitations
-
-- Logged-in or authenticated pages cannot be scanned; some manual testing is necessary.
-- Resources that load only after user interactions (e.g., clicking a video) must be discovered manually.
