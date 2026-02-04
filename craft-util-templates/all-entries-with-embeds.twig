@@ -1,0 +1,35 @@
+<!doctype html>
+
+{# Minimal HTML test page: no styling, and explicitly block robots/indexing #}
+{% do craft.app.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet') %}
+
+{% set embedBlocks = craft.neo.blocks({
+    type: 'script'
+}).all() %}
+{% set ownerIds = embedBlocks|column('ownerId')|unique %}
+{% set entriesWithEmbeds = craft.entries()
+    .id(ownerIds)
+    .section(['not', 'moduleListing'])
+    .all() %}
+
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+    <title>All Entries with Embeds</title>
+</head>
+<body>
+    <ul>
+        {% for entry in entriesWithEmbeds %}
+            <li>
+                {% if entry.url %}
+                    <a href="{{ entry.url }}" target="_blank">{{ entry.title }}</a>
+                {% else %}
+                    {{ entry.title }}
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

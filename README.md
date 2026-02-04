@@ -63,7 +63,7 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 |----------|----------|---------|-------------|
 | `BASE_URL` | Yes* | — | Target site URL (can also be provided via `--baseUrl`) |
 | `MAX_PAGES` | No | `50000` | Max pages to crawl |
-| `MAX_LINKS_PER_PAGE` | No | `1000` | Max number of same-origin links to enqueue per page (useful for sitemap/index pages) |
+| `MAX_LINKS_PER_PAGE` | No | `50000` | Max number of same-origin links to enqueue per page (useful for sitemap/index pages) |
 | `MAX_DEPTH` | No | `10` | Max crawl depth (0 = only base page, 1 = base page + links from it, etc.) |
 | `CONCURRENCY` | No | `5` | Number of concurrent browser tabs |
 | `MAX_RETRIES` | No | `2` | Max retries per page before marking as failed (3 total attempts) |
@@ -78,6 +78,14 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 ## Templates
 
 The `create` script can include predefined CSP sources for common third-party services. Templates are stored as JSON files in the `templates/` directory.
+
+### Craft CMS Notes
+
+We frequently use this crawler with Craft CMS. It helps to add a `/utils` directory under your Craft templates to build comprehensive lists of entries (e.g., all URLs or entries matching specific criteria) for crawling and CSP review. Example Twig utilities are available in `craft-util-templates/` and may need to be modified to suit your Craft install:
+
+- `craft-util-templates/all-entries-with-urls.twig`
+- `craft-util-templates/all-entries-with-embeds.twig`
+- `craft-util-templates/all-entry-types.twig`
 
 ### Included Templates
 - **Cloudflare CDN**
@@ -114,7 +122,15 @@ Concise test plan and TODOs for the next iteration (using `bun test`):
 - Add template loading validation tests (malformed JSON, missing `directives`).
 - Add a mocked puppeteer harness to test crawl flow deterministically.
 - Add an opt-in integration test (`RUN_E2E=1`) that crawls a local fixture server.
+- Add support for `sitemap.xml` discovery, including sitemap indexes that link to other sitemaps.
 
 ## Considerations
 
 The CSP typically applies to both the frontend and backend. Since the backend cannot be scanned by this script, you may need to manually check the backend for CSP violations.
+
+Iframe CSP errors can appear in the console and be reported, but they do not require action. We may explore excluding those in the future.
+
+## Limitations
+
+- Logged-in or authenticated pages cannot be scanned; some manual testing is necessary.
+- Resources that load only after user interactions (e.g., clicking a video) must be discovered manually.

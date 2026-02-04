@@ -78,7 +78,7 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const maxPages = parseIntOrExit(maxPagesRaw, 'MAX_PAGES/--maxPages')
 
     const cliMaxLinksPerPage = values.maxLinksPerPage || values['max-links-per-page']
-    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '1000'
+    const maxLinksPerPageRaw = cliMaxLinksPerPage || env.MAX_LINKS_PER_PAGE || '50000'
     const maxLinksPerPage = parseIntOrExit(maxLinksPerPageRaw, 'MAX_LINKS_PER_PAGE/--maxLinksPerPage')
 
     const cliMaxDepth = values.maxDepth || values['max-depth']
