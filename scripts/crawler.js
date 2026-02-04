@@ -143,23 +143,14 @@ export async function crawlSite(options = {}) {
 
     try {
 
-        // Create worker pages
-        const workerPages = []
-
-        for (let i = 0; i < config.concurrency; i++) {
-            const page = await browser.newPage()
-
-            await page.setRequestInterception(true)
-            workerPages.push(page)
-        }
-
-        // Set up each worker page with its own listeners
-        for (const workerPage of workerPages) {
+        async function setupWorkerPage(page) {
             let currentPageUrl = ''
 
+            await page.setRequestInterception(true)
+
             // Set up request interception
-            workerPage.on('request', request => {
-                if (request.frame() === workerPage.mainFrame() && request.resourceType() === 'document') {
+            page.on('request', request => {
+                if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
                     try {
                         if (new URL(request.url()).origin !== baseOrigin) {
                             const redirectChain = request.redirectChain()
@@ -202,17 +193,29 @@ export async function crawlSite(options = {}) {
 
             // Set up console message listener if provided
             if (options.onConsoleMessage) {
-                workerPage.on('console', msg => {
+                page.on('console', msg => {
                     options.onConsoleMessage(msg, currentPageUrl)
                 })
             }
 
             // Store a setter so the worker loop can update currentPageUrl
-            workerPage._setCurrentUrl = url => { currentPageUrl = url }
+            page._setCurrentUrl = url => { currentPageUrl = url }
+
+            return page
+        }
+
+        // Create worker pages
+        const workerPages = []
+
+        for (let i = 0; i < config.concurrency; i++) {
+            const page = await setupWorkerPage(await browser.newPage())
+
+            workerPages.push(page)
         }
 
         // Worker function
         async function processQueue(workerPage, workerId) {
+            let activePage = workerPage
             while (true) {
                 if (shuttingDown || visited.size >= config.maxPages) {return}
 
@@ -244,13 +247,13 @@ export async function crawlSite(options = {}) {
                 if (visited.size >= config.maxPages) {return}
 
                 activeWorkers++
-                workerPage._setCurrentUrl(currentUrl)
+                activePage._setCurrentUrl(currentUrl)
 
                 try {
                     log(`📄 [W${workerId}] [${visited.size + 1}] Visiting: ${currentUrl} (depth: ${currentDepth})`)
 
-                    const response = await workerPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
-                    const finalUrl = response?.url() || workerPage.url()
+                    const response = await activePage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                    const finalUrl = response?.url() || activePage.url()
 
                     try {
                         const finalOrigin = new URL(finalUrl).origin
@@ -281,11 +284,11 @@ export async function crawlSite(options = {}) {
 
                     // Call page visit callback with response
                     if (options.onPageVisit) {
-                        await options.onPageVisit(workerPage, currentUrl, currentDepth, response)
+                        await options.onPageVisit(activePage, currentUrl, currentDepth, response)
                     }
 
                     // Extract links from current page
-                    const linkResult = await workerPage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
+                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
                         const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                         const allLinks = anchors
@@ -347,6 +350,21 @@ export async function crawlSite(options = {}) {
                     log(`   📄 [W${workerId}] Found ${links.length} total links, ${newLinks.length} new links to visit`)
                     log(`   📊 [W${workerId}] Queue: ${toVisit.length - queueIndex} pages to visit, ${visited.size} visited`)
                 } catch (error) {
+                    const message = error?.message || ''
+
+                    if (message.includes('detached Frame')) {
+                        console.log(`⚠️  [W${workerId}] Detached frame for ${currentUrl}. Recreating page and retrying.`)
+
+                        try {
+                            await activePage.close()
+                        } catch (_e) {
+                            // Ignore close errors
+                        }
+
+                        activePage = await setupWorkerPage(await browser.newPage())
+                        workerPages[workerId - 1] = activePage
+                    }
+
                     if (redirectedExternal.has(currentUrl)) {
                         visited.add(currentUrl)
                         log(`↪️  [W${workerId}] Skipping ${currentUrl} - redirected to external origin`)
