@@ -105,10 +105,46 @@ export async function crawlSite(options = {}) {
     console.log(`📍 Base URL: ${config.baseUrl}`)
     console.log(`🔀 Concurrency: ${config.concurrency}`)
 
-    const browser = await puppeteer.launch({
-        headless: config.headless,
-        devtools: false,
-    })
+    const launchBrowser = async () => {
+        const launched = await puppeteer.launch({
+            headless: config.headless,
+            devtools: false,
+        })
+
+        launched.on('disconnected', () => {
+            console.log('⚠️  Browser disconnected. Will relaunch on next request.')
+        })
+
+        return launched
+    }
+
+    let browser = await launchBrowser()
+    let relaunchPromise = null
+
+    const ensureBrowser = () => {
+        if (browser?.isConnected?.()) { return browser }
+
+        if (!relaunchPromise) {
+            relaunchPromise = (async () => {
+                try {
+                    try {
+                        await browser?.close?.()
+                    } catch (_e) {
+                        // Ignore close errors
+                    }
+
+                    browser = await launchBrowser()
+                    console.log('♻️  Browser re-launched after disconnect.')
+
+                    return browser
+                } finally {
+                    relaunchPromise = null
+                }
+            })()
+        }
+
+        return relaunchPromise
+    }
 
     // Initialize crawl state
     const normalizedBaseUrl = normalizeUrl(config.baseUrl)
@@ -211,6 +247,23 @@ export async function crawlSite(options = {}) {
             const page = await setupWorkerPage(await browser.newPage())
 
             workerPages.push(page)
+        }
+
+        const recreateWorkerPage = async (workerId, activePage, reason) => {
+            console.log(`⚠️  [W${workerId}] ${reason} Recreating page and retrying.`)
+
+            try {
+                await activePage.close()
+            } catch (_e) {
+                // Ignore close errors
+            }
+
+            await ensureBrowser()
+            const page = await setupWorkerPage(await browser.newPage())
+
+            workerPages[workerId - 1] = page
+
+            return page
         }
 
         // Worker function
@@ -354,18 +407,14 @@ export async function crawlSite(options = {}) {
                     log(`   📊 [W${workerId}] Queue: ${toVisit.length - queueIndex} pages to visit, ${visited.size} visited`)
                 } catch (error) {
                     const message = error?.message || ''
+                    const isConnectionClosed = error?.name === 'ConnectionClosedError'
+                        || message.includes('Connection closed')
+                        || !browser?.isConnected?.()
 
-                    if (message.includes('detached Frame')) {
-                        console.log(`⚠️  [W${workerId}] Detached frame for ${currentUrl}. Recreating page and retrying.`)
-
-                        try {
-                            await activePage.close()
-                        } catch (_e) {
-                            // Ignore close errors
-                        }
-
-                        activePage = await setupWorkerPage(await browser.newPage())
-                        workerPages[workerId - 1] = activePage
+                    if (isConnectionClosed) {
+                        activePage = await recreateWorkerPage(workerId, activePage, 'Browser connection lost.')
+                    } else if (message.includes('detached Frame')) {
+                        activePage = await recreateWorkerPage(workerId, activePage, `Detached frame for ${currentUrl}.`)
                     }
 
                     if (redirectedExternal.has(currentUrl)) {
@@ -399,7 +448,11 @@ export async function crawlSite(options = {}) {
 
     } finally {
         process.removeListener('SIGINT', sigintHandler)
-        await browser.close()
+        try {
+            await browser?.close?.()
+        } catch (_e) {
+            // Ignore close errors
+        }
     }
 
     // Warn if crawl stopped due to maxPages limit
