@@ -89,7 +89,7 @@ export async function crawlSite(options = {}) {
     })
 
     const baseOrigin = new URL(config.baseUrl).origin
-    const log = (...args) => { if (!config.quiet) {console.log(...args)} }
+    const log = (...args) => { if (!config.quiet) { console.log(...args) } }
 
     // Confirmation prompt
     if (!options.skipConfirmation && !config.skipConfirmation) {
@@ -105,10 +105,46 @@ export async function crawlSite(options = {}) {
     console.log(`📍 Base URL: ${config.baseUrl}`)
     console.log(`🔀 Concurrency: ${config.concurrency}`)
 
-    const browser = await puppeteer.launch({
-        headless: config.headless,
-        devtools: false,
-    })
+    const launchBrowser = async () => {
+        const launched = await puppeteer.launch({
+            headless: config.headless,
+            devtools: false,
+        })
+
+        launched.on('disconnected', () => {
+            console.log('⚠️  Browser disconnected. Will relaunch on next request.')
+        })
+
+        return launched
+    }
+
+    let browser = await launchBrowser()
+    let relaunchPromise = null
+
+    const ensureBrowser = () => {
+        if (browser?.isConnected?.()) { return browser }
+
+        if (!relaunchPromise) {
+            relaunchPromise = (async () => {
+                try {
+                    try {
+                        await browser?.close?.()
+                    } catch (_e) {
+                        // Ignore close errors
+                    }
+
+                    browser = await launchBrowser()
+                    console.log('♻️  Browser re-launched after disconnect.')
+
+                    return browser
+                } finally {
+                    relaunchPromise = null
+                }
+            })()
+        }
+
+        return relaunchPromise
+    }
 
     // Initialize crawl state
     const normalizedBaseUrl = normalizeUrl(config.baseUrl)
@@ -122,8 +158,10 @@ export async function crawlSite(options = {}) {
         linksFound: 0,
         newLinksFound: 0,
         linksTruncated: 0,
+        redirectsExternal: 0,
         errors: [],
     }
+    const redirectedExternal = new Map()
     let activeWorkers = 0
     let shuttingDown = false
 
@@ -141,25 +179,33 @@ export async function crawlSite(options = {}) {
 
     try {
 
-        // Create worker pages
-        const workerPages = []
-
-        for (let i = 0; i < config.concurrency; i++) {
-            const page = await browser.newPage()
-
-            await page.setRequestInterception(true)
-            workerPages.push(page)
-        }
-
-        // Set up each worker page with its own listeners
-        for (const workerPage of workerPages) {
+        async function setupWorkerPage(page) {
             let currentPageUrl = ''
 
+            await page.setRequestInterception(true)
+
             // Set up request interception
-            workerPage.on('request', request => {
-                if (request.frame() === workerPage.mainFrame() && request.resourceType() === 'document') {
+            page.on('request', request => {
+                if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
                     try {
                         if (new URL(request.url()).origin !== baseOrigin) {
+                            const redirectChain = request.redirectChain()
+
+                            if (redirectChain.length > 0) {
+                                const fromUrl = normalizeUrl(redirectChain[redirectChain.length - 1].url())
+                                const toUrl = normalizeUrl(request.url())
+
+                                if (!redirectedExternal.has(fromUrl)) {
+                                    redirectedExternal.set(fromUrl, {
+                                        from: fromUrl,
+                                        to: toUrl,
+                                        chain: [ ...redirectChain.map(r => r.url()), request.url() ],
+                                        reason: 'redirected-to-external-origin',
+                                    })
+                                    crawlStats.redirectsExternal++
+                                }
+                            }
+
                             request.abort()
 
                             return
@@ -175,7 +221,7 @@ export async function crawlSite(options = {}) {
                 if (options.onRequestIntercept) {
                     const handled = options.onRequestIntercept(request)
 
-                    if (handled) {return}
+                    if (handled) { return }
                 }
 
                 request.continue()
@@ -183,22 +229,52 @@ export async function crawlSite(options = {}) {
 
             // Set up console message listener if provided
             if (options.onConsoleMessage) {
-                workerPage.on('console', msg => {
+                page.on('console', msg => {
                     options.onConsoleMessage(msg, currentPageUrl)
                 })
             }
 
             // Store a setter so the worker loop can update currentPageUrl
-            workerPage._setCurrentUrl = url => { currentPageUrl = url }
+            page._setCurrentUrl = url => { currentPageUrl = url }
+
+            return page
+        }
+
+        // Create worker pages
+        const workerPages = []
+
+        for (let i = 0; i < config.concurrency; i++) {
+            const page = await setupWorkerPage(await browser.newPage())
+
+            workerPages.push(page)
+        }
+
+        const recreateWorkerPage = async (workerId, activePage, reason) => {
+            console.log(`⚠️  [W${workerId}] ${reason} Recreating page and retrying.`)
+
+            try {
+                await activePage.close()
+            } catch (_e) {
+                // Ignore close errors
+            }
+
+            await ensureBrowser()
+            const page = await setupWorkerPage(await browser.newPage())
+
+            workerPages[workerId - 1] = page
+
+            return page
         }
 
         // Worker function
         async function processQueue(workerPage, workerId) {
+            let activePage = workerPage
+
             while (true) {
-                if (shuttingDown || visited.size >= config.maxPages) {return}
+                if (shuttingDown || visited.size >= config.maxPages) { return }
 
                 if (queueIndex >= toVisit.length) {
-                    if (activeWorkers === 0) {return}
+                    if (activeWorkers === 0) { return }
 
                     await new Promise(resolve => setTimeout(resolve, 100))
 
@@ -212,9 +288,9 @@ export async function crawlSite(options = {}) {
 
                 pending.delete(currentUrl)
 
-                if (visited.has(currentUrl)) {continue}
+                if (visited.has(currentUrl)) { continue }
 
-                if (failed.has(currentUrl)) {continue}
+                if (failed.has(currentUrl)) { continue }
 
                 if (currentDepth > config.maxDepth) {
                     log(`🔚 [W${workerId}] Skipping ${currentUrl} - max depth (${config.maxDepth}) reached`)
@@ -222,26 +298,51 @@ export async function crawlSite(options = {}) {
                     continue
                 }
 
-                if (visited.size >= config.maxPages) {return}
+                if (visited.size >= config.maxPages) { return }
 
                 activeWorkers++
-                workerPage._setCurrentUrl(currentUrl)
+                activePage._setCurrentUrl(currentUrl)
 
                 try {
                     log(`📄 [W${workerId}] [${visited.size + 1}] Visiting: ${currentUrl} (depth: ${currentDepth})`)
 
-                    const response = await workerPage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                    const response = await activePage.goto(currentUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+                    const finalUrl = response?.url() || activePage.url()
+
+                    try {
+                        const finalOrigin = new URL(finalUrl).origin
+
+                        if (finalOrigin !== baseOrigin) {
+                            if (!redirectedExternal.has(currentUrl)) {
+                                const redirectChain = response?.request()?.redirectChain?.() || []
+
+                                redirectedExternal.set(currentUrl, {
+                                    from: currentUrl,
+                                    to: finalUrl,
+                                    chain: [ ...redirectChain.map(r => r.url()), finalUrl ],
+                                    reason: 'redirected-to-external-origin',
+                                })
+                                crawlStats.redirectsExternal++
+                            }
+
+                            visited.add(currentUrl)
+                            log(`↪️  [W${workerId}] Skipping ${currentUrl} - redirected to external origin (${finalUrl})`)
+                            continue
+                        }
+                    } catch (_e) {
+                        // If finalUrl is invalid, proceed with the crawl as normal.
+                    }
 
                     visited.add(currentUrl)
                     crawlStats.pagesScanned++
 
                     // Call page visit callback with response
                     if (options.onPageVisit) {
-                        await options.onPageVisit(workerPage, currentUrl, currentDepth, response)
+                        await options.onPageVisit(activePage, currentUrl, currentDepth, response)
                     }
 
                     // Extract links from current page
-                    const linkResult = await workerPage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
+                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
                         const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                         const allLinks = anchors
@@ -250,10 +351,10 @@ export async function crawlSite(options = {}) {
                                     const rawHref = a.getAttribute('href') || ''
                                     const url = new URL(rawHref, document.baseURI)
 
-                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') {return null}
+                                    if (url.protocol !== 'http:' && url.protocol !== 'https:') { return null }
 
                                     url.hash = ''
-                                    if (url.origin !== baseOrigin) {return null}
+                                    if (url.origin !== baseOrigin) { return null }
 
                                     return url.toString()
                                 } catch (_e) {
@@ -287,15 +388,17 @@ export async function crawlSite(options = {}) {
                     // Add new links to visit queue (normalize before checking)
                     const newLinks = []
 
-                    links.forEach(rawLink => {
-                        const link = normalizeUrl(rawLink)
+                    if (currentDepth < config.maxDepth) {
+                        links.forEach(rawLink => {
+                            const link = normalizeUrl(rawLink)
 
-                        if (!visited.has(link) && !failed.has(link) && !pending.has(link)) {
-                            toVisit.push({ url: link, depth: currentDepth + 1, retries: 0 })
-                            pending.add(link)
-                            newLinks.push(link)
-                        }
-                    })
+                            if (!visited.has(link) && !failed.has(link) && !pending.has(link)) {
+                                toVisit.push({ url: link, depth: currentDepth + 1, retries: 0 })
+                                pending.add(link)
+                                newLinks.push(link)
+                            }
+                        })
+                    }
 
                     crawlStats.linksFound += links.length
                     crawlStats.newLinksFound += newLinks.length
@@ -303,6 +406,23 @@ export async function crawlSite(options = {}) {
                     log(`   📄 [W${workerId}] Found ${links.length} total links, ${newLinks.length} new links to visit`)
                     log(`   📊 [W${workerId}] Queue: ${toVisit.length - queueIndex} pages to visit, ${visited.size} visited`)
                 } catch (error) {
+                    const message = error?.message || ''
+                    const isConnectionClosed = error?.name === 'ConnectionClosedError'
+                        || message.includes('Connection closed')
+                        || !browser?.isConnected?.()
+
+                    if (isConnectionClosed) {
+                        activePage = await recreateWorkerPage(workerId, activePage, 'Browser connection lost.')
+                    } else if (message.includes('detached Frame')) {
+                        activePage = await recreateWorkerPage(workerId, activePage, `Detached frame for ${currentUrl}.`)
+                    }
+
+                    if (redirectedExternal.has(currentUrl)) {
+                        visited.add(currentUrl)
+                        log(`↪️  [W${workerId}] Skipping ${currentUrl} - redirected to external origin`)
+                        continue
+                    }
+
                     if (retries < config.maxRetries) {
                         toVisit.push({ url: currentUrl, depth: currentDepth, retries: retries + 1 })
                         pending.add(currentUrl)
@@ -328,7 +448,11 @@ export async function crawlSite(options = {}) {
 
     } finally {
         process.removeListener('SIGINT', sigintHandler)
-        await browser.close()
+        try {
+            await browser?.close?.()
+        } catch (_e) {
+            // Ignore close errors
+        }
     }
 
     // Warn if crawl stopped due to maxPages limit
@@ -352,6 +476,7 @@ export async function crawlSite(options = {}) {
     console.log(`Pages scanned: ${visited.size}`)
     console.log(`Total links found: ${crawlStats.linksFound}`)
     console.log(`New links discovered: ${crawlStats.newLinksFound}`)
+    console.log(`External redirects skipped: ${crawlStats.redirectsExternal}`)
     console.log(`Errors encountered: ${crawlStats.errors.length}`)
 
     if (abandonedUrls.length > 0) {
@@ -368,6 +493,7 @@ export async function crawlSite(options = {}) {
         pagesScanned: Array.from(visited),
         pagesFailed: Array.from(failed),
         pagesAbandoned: abandonedUrls,
+        pagesRedirectedExternal: Array.from(redirectedExternal.values()),
         crawlStats,
         config: {
             baseUrl: config.baseUrl,

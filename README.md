@@ -102,6 +102,10 @@ We often use this with Craft CMS. Add a `/utils` templates directory to list ent
 - [All Entries with an Embed Matrix Block](`craft-util-templates/all-entries-with-embeds.twig`)
 - [All Entry Types including Craft Calendar Plugin Events](`craft-util-templates/all-entry-types.twig`)
 
+Remember to exclude sections like the Module Listing, CMS Guide, or others you wish to ignore.
+
+You may also need to add Categories, Tags, or other Custom Elements that are not Entries.
+
 ## Limitations
 
 - Logged-in or authenticated pages cannot be scanned; some manual testing is necessary.
