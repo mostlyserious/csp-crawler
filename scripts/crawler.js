@@ -93,7 +93,17 @@ export async function crawlSite(options = {}) {
         env: options.env || process.env,
     })
 
-    const baseOrigin = new URL(config.baseUrl).origin
+    const baseUrl = new URL(config.baseUrl)
+    const baseOrigin = baseUrl.origin
+    const baseHostname = baseUrl.hostname.replace(/^www\./, '')
+    const isSameSiteUrl = candidateUrl => {
+        try {
+            return new URL(candidateUrl).hostname.replace(/^www\./, '') === baseHostname
+        } catch (_e) {
+            return false
+        }
+    }
+
     const log = (...args) => { if (!config.quiet) { console.log(...args) } }
 
     // Confirmation prompt
@@ -193,7 +203,7 @@ export async function crawlSite(options = {}) {
             page.on('request', request => {
                 if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
                     try {
-                        if (new URL(request.url()).origin !== baseOrigin) {
+                        if (!isSameSiteUrl(request.url())) {
                             const redirectChain = request.redirectChain()
 
                             if (redirectChain.length > 0) {
@@ -315,9 +325,7 @@ export async function crawlSite(options = {}) {
                     const finalUrl = response?.url() || activePage.url()
 
                     try {
-                        const finalOrigin = new URL(finalUrl).origin
-
-                        if (finalOrigin !== baseOrigin) {
+                        if (!isSameSiteUrl(finalUrl)) {
                             if (!redirectedExternal.has(currentUrl)) {
                                 const redirectChain = response?.request()?.redirectChain?.() || []
 
@@ -347,7 +355,7 @@ export async function crawlSite(options = {}) {
                     }
 
                     // Extract links from current page
-                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
+                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage, excludePattern, excludedExtensions, excludedProtocols }) => {
                         const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                         const allLinks = anchors
@@ -390,6 +398,7 @@ export async function crawlSite(options = {}) {
 
                                 try {
                                     const regex = new RegExp(excludePattern, 'i')
+
                                     return !regex.test(href)
                                 } catch (_e) {
                                     return true
