@@ -35,6 +35,8 @@ async function confirmCrawl(config, action) {
 }
 
 const trackingParams = [ 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'fbclid', 'gclid' ]
+const excludedExtensions = [ '.pdf', '.ics', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico', '.bmp', '.tif', '.tiff', '.avif' ]
+const excludedProtocols = [ 'mailto:', 'tel:' ]
 
 function normalizeUrl(urlString) {
     try {
@@ -362,10 +364,26 @@ export async function crawlSite(options = {}) {
                                 }
                             })
                             .filter(Boolean)
-                            .filter(href => !href.toLowerCase().includes('.pdf'))
-                            .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
-                            .filter(href => !href.includes('tel:'))
-                            .filter(href => !href.includes('mailto:'))
+                            .filter(href => {
+                                const lowerHref = href.toLowerCase()
+
+                                for (const proto of excludedProtocols) {
+                                    if (lowerHref.startsWith(proto)) { return false }
+                                }
+
+                                if (lowerHref.includes('calendarize/default/make-ics')) { return false }
+
+                                for (const ext of excludedExtensions) {
+                                    if (lowerHref.includes(ext)) {
+                                        const matchesEnd = lowerHref.endsWith(ext)
+                                        const matchesQuery = lowerHref.includes(`${ext}?`) || lowerHref.includes(`${ext}#`) || lowerHref.includes(`${ext}&`)
+
+                                        if (matchesEnd || matchesQuery) { return false }
+                                    }
+                                }
+
+                                return true
+                            })
 
                         const uniqueLinks = [ ...new Set(allLinks) ]
 
