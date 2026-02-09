@@ -41,6 +41,7 @@ bun run validate -- --baseUrl https://example.com --quiet
 # --headless / --no-headless
 # --quiet
 # --outputFile / --output-file
+# --excludePattern / --exclude-pattern
 # --yes / --skipConfirmation (skip confirmation prompt)
 ```
 
@@ -61,6 +62,7 @@ Press `Ctrl+C` once during a crawl to gracefully shut down (finishes current pag
 | `HEADLESS` | No | `true` | Run browser headless (set to `false` or use `--no-headless` to show browser window) |
 | `QUIET` | No | `false` | Suppress per-page log output |
 | `SKIP_CONFIRMATION` | No | `false` | Skip confirmation prompt (for automated usage) |
+| `EXCLUDE_PATTERN` | No | — | Regex pattern for URLs to exclude from crawling (case-insensitive) |
 
 *`BASE_URL` is required unless you pass `--baseUrl`.
 

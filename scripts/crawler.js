@@ -28,6 +28,9 @@ async function confirmCrawl(config, action) {
     console.log(`   Max Retries: ${config.maxRetries}`)
     console.log(`   Delay: ${config.delay}ms`)
     console.log(`   Headless: ${config.headless}`)
+    if (config.excludePattern) {
+        console.log(`   Exclude Pattern: ${config.excludePattern}`)
+    }
 
     const answer = await prompt('\nAre you ready to proceed? (y/n): ')
 
@@ -35,6 +38,8 @@ async function confirmCrawl(config, action) {
 }
 
 const trackingParams = [ 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'ref', 'fbclid', 'gclid' ]
+const excludedExtensions = [ '.pdf', '.ics', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.ico', '.bmp', '.tif', '.tiff', '.avif' ]
+const excludedProtocols = [ 'mailto:', 'tel:' ]
 
 function normalizeUrl(urlString) {
     try {
@@ -88,7 +93,17 @@ export async function crawlSite(options = {}) {
         env: options.env || process.env,
     })
 
-    const baseOrigin = new URL(config.baseUrl).origin
+    const baseUrl = new URL(config.baseUrl)
+    const baseOrigin = baseUrl.origin
+    const baseHostname = baseUrl.hostname.replace(/^www\./, '')
+    const isSameSiteUrl = candidateUrl => {
+        try {
+            return new URL(candidateUrl).hostname.replace(/^www\./, '') === baseHostname
+        } catch (_e) {
+            return false
+        }
+    }
+
     const log = (...args) => { if (!config.quiet) { console.log(...args) } }
 
     // Confirmation prompt
@@ -188,7 +203,7 @@ export async function crawlSite(options = {}) {
             page.on('request', request => {
                 if (request.frame() === page.mainFrame() && request.resourceType() === 'document') {
                     try {
-                        if (new URL(request.url()).origin !== baseOrigin) {
+                        if (!isSameSiteUrl(request.url())) {
                             const redirectChain = request.redirectChain()
 
                             if (redirectChain.length > 0) {
@@ -310,9 +325,7 @@ export async function crawlSite(options = {}) {
                     const finalUrl = response?.url() || activePage.url()
 
                     try {
-                        const finalOrigin = new URL(finalUrl).origin
-
-                        if (finalOrigin !== baseOrigin) {
+                        if (!isSameSiteUrl(finalUrl)) {
                             if (!redirectedExternal.has(currentUrl)) {
                                 const redirectChain = response?.request()?.redirectChain?.() || []
 
@@ -342,7 +355,7 @@ export async function crawlSite(options = {}) {
                     }
 
                     // Extract links from current page
-                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage }) => {
+                    const linkResult = await activePage.evaluate(({ baseOrigin, maxLinksPerPage, excludePattern, excludedExtensions, excludedProtocols }) => {
                         const anchors = Array.from(document.querySelectorAll('a[href]'))
 
                         const allLinks = anchors
@@ -362,10 +375,35 @@ export async function crawlSite(options = {}) {
                                 }
                             })
                             .filter(Boolean)
-                            .filter(href => !href.toLowerCase().includes('.pdf'))
-                            .filter(href => !(/\.(?:jpe?g|png|gif|webp|svg|ico|bmp|tiff?|avif)(?:\?|$)/i).test(href))
-                            .filter(href => !href.includes('tel:'))
-                            .filter(href => !href.includes('mailto:'))
+                            .filter(href => {
+                                const lowerHref = href.toLowerCase()
+
+                                for (const proto of excludedProtocols) {
+                                    if (lowerHref.startsWith(proto)) { return false }
+                                }
+
+                                for (const ext of excludedExtensions) {
+                                    if (lowerHref.includes(ext)) {
+                                        const matchesEnd = lowerHref.endsWith(ext)
+                                        const matchesQuery = lowerHref.includes(`${ext}?`) || lowerHref.includes(`${ext}#`) || lowerHref.includes(`${ext}&`)
+
+                                        if (matchesEnd || matchesQuery) { return false }
+                                    }
+                                }
+
+                                return true
+                            })
+                            .filter(href => {
+                                if (!excludePattern) { return true }
+
+                                try {
+                                    const regex = new RegExp(excludePattern, 'i')
+
+                                    return !regex.test(href)
+                                } catch (_e) {
+                                    return true
+                                }
+                            })
 
                         const uniqueLinks = [ ...new Set(allLinks) ]
 
@@ -374,7 +412,13 @@ export async function crawlSite(options = {}) {
                             totalFound: uniqueLinks.length,
                             wasTruncated: uniqueLinks.length > maxLinksPerPage,
                         }
-                    }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
+                    }, {
+                        baseOrigin,
+                        maxLinksPerPage: config.maxLinksPerPage,
+                        excludePattern: config.excludePattern,
+                        excludedExtensions,
+                        excludedProtocols,
+                    })
 
                     const { links, totalFound, wasTruncated } = linkResult
 
