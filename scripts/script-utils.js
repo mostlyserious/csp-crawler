@@ -53,6 +53,8 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
             'max-retries': { type: 'string' },
             delay: { type: 'string' },
             quiet: { type: 'boolean' },
+            excludePattern: { type: 'string' },
+            'exclude-pattern': { type: 'string' },
         },
         strict: false,
         allowPositionals: true,
@@ -109,6 +111,9 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const cliQuiet = values.quiet
     const quiet = typeof cliQuiet === 'boolean' ? cliQuiet : env.QUIET === 'true'
 
+    const cliExcludePattern = values.excludePattern || values['exclude-pattern']
+    const excludePattern = cliExcludePattern || env.EXCLUDE_PATTERN || ''
+
     return {
         baseUrl,
         maxPages,
@@ -121,5 +126,6 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
         maxRetries,
         delay,
         quiet,
+        excludePattern,
     }
 }

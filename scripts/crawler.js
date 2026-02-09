@@ -28,6 +28,9 @@ async function confirmCrawl(config, action) {
     console.log(`   Max Retries: ${config.maxRetries}`)
     console.log(`   Delay: ${config.delay}ms`)
     console.log(`   Headless: ${config.headless}`)
+    if (config.excludePattern) {
+        console.log(`   Exclude Pattern: ${config.excludePattern}`)
+    }
 
     const answer = await prompt('\nAre you ready to proceed? (y/n): ')
 
@@ -371,8 +374,6 @@ export async function crawlSite(options = {}) {
                                     if (lowerHref.startsWith(proto)) { return false }
                                 }
 
-                                if (lowerHref.includes('calendarize/default/make-ics')) { return false }
-
                                 for (const ext of excludedExtensions) {
                                     if (lowerHref.includes(ext)) {
                                         const matchesEnd = lowerHref.endsWith(ext)
@@ -384,6 +385,16 @@ export async function crawlSite(options = {}) {
 
                                 return true
                             })
+                            .filter(href => {
+                                if (!excludePattern) { return true }
+
+                                try {
+                                    const regex = new RegExp(excludePattern, 'i')
+                                    return !regex.test(href)
+                                } catch (_e) {
+                                    return true
+                                }
+                            })
 
                         const uniqueLinks = [ ...new Set(allLinks) ]
 
@@ -392,7 +403,13 @@ export async function crawlSite(options = {}) {
                             totalFound: uniqueLinks.length,
                             wasTruncated: uniqueLinks.length > maxLinksPerPage,
                         }
-                    }, { baseOrigin, maxLinksPerPage: config.maxLinksPerPage })
+                    }, {
+                        baseOrigin,
+                        maxLinksPerPage: config.maxLinksPerPage,
+                        excludePattern: config.excludePattern,
+                        excludedExtensions,
+                        excludedProtocols,
+                    })
 
                     const { links, totalFound, wasTruncated } = linkResult
 
