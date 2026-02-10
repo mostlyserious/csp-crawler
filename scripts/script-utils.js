@@ -114,6 +114,15 @@ export function getCommonConfig({ reportPrefix, reportsDir, args = process.argv.
     const cliExcludePattern = values.excludePattern || values['exclude-pattern']
     const excludePattern = cliExcludePattern || env.EXCLUDE_PATTERN || ''
 
+    if (excludePattern) {
+        try {
+            new RegExp(excludePattern)
+        } catch {
+            console.error(`❌ Invalid EXCLUDE_PATTERN regex: ${excludePattern}`)
+            process.exit(1)
+        }
+    }
+
     return {
         baseUrl,
         maxPages,

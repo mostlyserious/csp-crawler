@@ -1,9 +1,10 @@
 import 'dotenv/config'
 import fs from 'fs'
-import { getCommonConfig } from './script-utils.js'
+import { getCommonConfig, getScriptDirs } from './script-utils.js'
 import { crawlSite as sharedCrawlSite } from './crawler.js'
 
-const config = getCommonConfig({ reportPrefix: 'csp-violations', reportsDir: './reports' })
+const { reportsDir } = getScriptDirs(import.meta.url)
+const config = getCommonConfig({ reportPrefix: 'csp-violations', reportsDir })
 
 async function validateCSP() {
     console.log('🔍 Starting CSP crawler...')
@@ -70,9 +71,7 @@ async function validateCSP() {
     }
 }
 
-// Check if puppeteer is available
-try {
-    validateCSP().catch(console.error)
-} catch (_error) {
-    console.log('❌ Puppeteer not installed.')
-}
+validateCSP().catch(error => {
+    console.error(`❌ ${error.message}`)
+    process.exit(1)
+})

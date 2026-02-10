@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer'
 import readline from 'readline'
-import { getCommonConfig } from './script-utils.js'
+import { getCommonConfig, getScriptDirs } from './script-utils.js'
 
 // Confirmation helper function
 function prompt(question) {
@@ -86,9 +86,11 @@ function normalizeUrl(urlString) {
  * @returns {Promise<Object>} Crawl results
  */
 export async function crawlSite(options = {}) {
+    const { reportsDir } = getScriptDirs(import.meta.url)
+
     const config = getCommonConfig({
         reportPrefix: 'csp-crawl',
-        reportsDir: './reports',
+        reportsDir,
         args: options.args || [],
         env: options.env || process.env,
     })

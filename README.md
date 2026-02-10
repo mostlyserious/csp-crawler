@@ -11,10 +11,19 @@ Bun (latest)
 ```bash
 bun install
 cp .env.example .env
-bun run validate
 ```
 
 Configuration with `.env` is recommended. Edit it with your target URL. And that may be the only configuration you need.
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `bun run validate` | Crawl and validate CSP headers, collecting violations |
+| `bun run check` | Alias for `validate` |
+| `bun run create` | Crawl and generate a CSP policy with optional template merging |
+| `bun run clear-reports` | Delete all files in `reports/` |
+| `bun run lint` | Run ESLint with auto-fix |
 
 ```bash
 # Typical usage:
